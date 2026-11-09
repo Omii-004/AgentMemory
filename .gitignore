@@ -1,0 +1,62 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+
+# Python virtual environment & packages
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+wheels/
+
+# Bytecode & Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Linting Cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Logs & Temporary Files
+*.log
+logs/
+tmp/
+
+# Database files & Docker data
+*.sqlite3
+postgres_data/
+
+# Specification & Text Documents
+*.txt
+API-SPEC*
+Benchmark Specification*
+DDD*
+Design Specification*
+DevOps and Development Infrastructure Specification*
+Experiment Protocol*
+PRD*
+SAD*
+SRS*
+Security and Privacy Specification*
+Software Test Plan*
+
+# Experiment Artifacts (future local runs)
+experiment-artifacts/traces/
+experiment-artifacts/reports/*.pdf
