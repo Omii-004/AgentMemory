@@ -9,7 +9,7 @@
 
 ## Architecture Overview
 
-AgentMemory implements four distinct memory architectures under a unified, isolated asynchronous interface (`BaseMemory`):
+AgentMemory implements four interchangeable memory architectures under a unified, namespace-isolated asynchronous contract (`BaseMemory`):
 
 | Architecture | Description | Key Mechanism |
 |---|---|---|
@@ -23,21 +23,26 @@ AgentMemory implements four distinct memory architectures under a unified, isola
 ## Core Capabilities Built
 
 - **20 Core Relational Tables:** Fully normalized PostgreSQL 16 schema managed via SQLAlchemy 2.0 (asyncio) and Alembic migrations.
-- **Local CPU Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` with asynchronous thread-pooling to avoid event-loop blocking.
-- **Provider-Independent LLM Layer:** Unified adapter interface supporting:
-  - `MockLLM`: Deterministic, zero-cost offline test harness.
-  - `OllamaLLM`: Local inference (`http://localhost:11434`).
-  - `OpenAICompatibleLLM`: Cloud providers (OpenAI, Groq, DeepSeek).
-- **Multi-Tenant Security:** Enforces strict namespace and project isolation per user, preventing cross-tenant memory leakage.
-- **Zero-Leakage Deletion:** Hard-purges vector embeddings and closes fact validity intervals upon deletion requests.
+- **Local CPU Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` with asynchronous thread-pooling to avoid blocking FastAPI's event loop.
+- **Provider-Independent LLM Layer:** Unified adapter interface supporting `MockLLM` (deterministic offline testing), `OllamaLLM` (local models), and `OpenAICompatibleLLM` (cloud providers).
+- **6-Category Synthetic Benchmark Suite:** Automated benchmark task generation and execution across:
+  1. **Fact Retrieval** (with configurable conversational noise distractors)
+  2. **Temporal Reasoning**
+  3. **Contradiction Handling**
+  4. **Multi-Hop Retrieval**
+  5. **Memory Updating**
+  6. **Memory Deletion** (verifying zero retrieval or vector leakage)
+- **Quantitative Evaluation & Observability Engine:** Calculates **Task Success Rate (TSR)**, **Precision@K**, **Recall@K**, **MRR**, latencies, token usage, **Memory Utility**, failure classifications, and step-by-step execution traces.
+- **Full RESTful API (`/api/v1`):** 56 HTTP endpoints covering Auth, Projects, Sessions, Memory Lab & Inspector, Datasets, Async Background Experiment Runs, Side-by-Side Architecture Comparisons, Traces, and JSON/CSV Report Exports.
 
 ---
 
 ## Tech Stack
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0 (asyncio), Alembic, Pydantic v2
-- **Vector Database:** PostgreSQL 16 + `pgvector`
+- **Database:** PostgreSQL 16 + `pgvector`
 - **Embeddings:** `sentence-transformers` (`all-MiniLM-L6-v2`)
+- **Security:** JWT (`python-jose`), native `bcrypt` password hashing, multi-tenant project isolation
 - **Package Manager:** `uv`
 - **Containers:** Docker Compose
 
@@ -63,6 +68,15 @@ uv pip install -e ".[dev]"
 alembic upgrade head
 ```
 
+### 4. Start the API Server
+```bash
+uvicorn app.main:app --reload
+```
+
+* **API Root:** http://127.0.0.1:8000/
+* **Interactive Swagger Docs:** http://127.0.0.1:8000/docs
+* **Health Check:** http://127.0.0.1:8000/health
+
 ---
 
 ## Project Structure
@@ -77,11 +91,16 @@ AgentMemory/
 │   ├── alembic.ini                 # Database migration config
 │   ├── migrations/                 # Alembic async migration versions
 │   └── app/
-│       ├── core/                   # Config, security (JWT/bcrypt), logging, exceptions
-│       ├── database/               # Connection manager, 20 SQLAlchemy models
+│       ├── main.py                 # FastAPI entrypoint, CORS, exception handlers
+│       ├── core/                   # Config, native bcrypt/JWT security, logging, exceptions
+│       ├── database/               # Connection pool, 20 SQLAlchemy models
 │       ├── embeddings/             # SentenceTransformers CPU embedding service
 │       ├── memory/                 # BaseMemory, History, Vector, Structured, Hybrid, Factory
 │       ├── llm/                    # BaseLLMAdapter, Mock, Ollama, OpenAI adapters, Factory
 │       ├── agent/                  # Context builder & prompt synthesis
-│       └── api/                    # Dependencies & FastAPI routers
+│       ├── benchmark/              # Task schemas, 6-category generator, async BenchmarkRunner
+│       ├── evaluation/             # GroundTruthEvaluator, failure classifier, MetricsCalculator
+│       ├── observability/          # Execution TraceCollector
+│       ├── schemas/                # Pydantic v2 API request/response contracts
+│       └── api/                    # Tenant-isolated dependencies & /api/v1 routers
 ```
