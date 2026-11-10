@@ -1,16 +1,16 @@
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
-    create_async_engine
+    create_async_engine,
 )
 from app.core.config import settings
 
 # Async engine for FastAPI
 engine = create_async_engine(
     settings.async_database_url,
-    echo=settings.DEBUG,
+    echo=settings.SQL_ECHO,
     future=True,
     pool_pre_ping=True,
     pool_size=10,
@@ -36,7 +36,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def init_db_extensions():
+async def init_db_extensions() -> None:
     """Initializes required PostgreSQL extensions (specifically pgvector)."""
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
