@@ -4,6 +4,7 @@ import json
 import uuid
 from pathlib import Path
 from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
@@ -11,7 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_project_for_user
 from app.benchmark.runner import BenchmarkRunner
-from app.core.exceptions import ArchitectureUnsupportedException, ExperimentBusyException, NotFoundException
+from app.core.exceptions import (
+    ArchitectureUnsupportedException,
+    ExperimentBusyException,
+    NotFoundException,
+)
 from app.database.connection import AsyncSessionLocal, get_db
 from app.database.models.benchmark import BenchmarkDataset
 from app.database.models.evaluation import ExecutionTrace, MetricResult, Report, TaskResult

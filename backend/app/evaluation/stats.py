@@ -1,5 +1,6 @@
 import itertools
-from typing import Any, Dict, List
+from typing import Any
+
 import numpy as np
 from scipy import stats
 
@@ -13,7 +14,7 @@ class StatisticalAnalyzer:
     """
 
     @staticmethod
-    def confidence_interval_95(values: List[float]) -> Dict[str, float]:
+    def confidence_interval_95(values: list[float]) -> dict[str, float]:
         n = len(values)
         if n == 0:
             return {"mean": 0.0, "std": 0.0, "ci_low": 0.0, "ci_high": 0.0}
@@ -50,7 +51,7 @@ class StatisticalAnalyzer:
         return "large"
 
     @classmethod
-    def compare_paired_arrays(cls, scores_a: List[float], scores_b: List[float]) -> Dict[str, Any]:
+    def compare_paired_arrays(cls, scores_a: list[float], scores_b: list[float]) -> dict[str, Any]:
         """Runs paired t-test, Wilcoxon signed-rank test, and Cohen's d between two architectures."""
         a = np.array(scores_a, dtype=float)
         b = np.array(scores_b, dtype=float)
@@ -92,7 +93,7 @@ class StatisticalAnalyzer:
         }
 
     @classmethod
-    def analyze_run(cls, arch_results: Dict[str, Dict[str, float]]) -> Dict[str, Any]:
+    def analyze_run(cls, arch_results: dict[str, dict[str, float]]) -> dict[str, Any]:
         """
         arch_results format: { "vector": { "task_key_or_id_trial": 1.0, ... }, "hybrid": { ... } }
         """

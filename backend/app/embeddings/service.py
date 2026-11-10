@@ -1,6 +1,8 @@
 import asyncio
-from typing import List, Optional
+from typing import Optional
+
 from sentence_transformers import SentenceTransformer
+
 from app.core.config import settings
 from app.core.logging import get_logger
 from app.embeddings.base import BaseEmbeddingService
@@ -12,9 +14,9 @@ class SentenceTransformerEmbeddingService(BaseEmbeddingService):
     """Local, CPU-optimized SentenceTransformer embedding engine."""
 
     _instance: Optional["SentenceTransformerEmbeddingService"] = None
-    _model: Optional[SentenceTransformer] = None
+    _model: SentenceTransformer | None = None
 
-    def __init__(self, model_name: Optional[str] = None):
+    def __init__(self, model_name: str | None = None):
         self.model_name = model_name or settings.EMBEDDING_MODEL
         self._dimension = settings.EMBEDDING_DIMENSION
         if SentenceTransformerEmbeddingService._model is None:
@@ -36,17 +38,17 @@ class SentenceTransformerEmbeddingService(BaseEmbeddingService):
     def dimension(self) -> int:
         return self._dimension
 
-    def embed_text(self, text: str) -> List[float]:
+    def embed_text(self, text: str) -> list[float]:
         """Generates embedding synchronously on CPU."""
         embedding = self.model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
         return embedding.tolist()
 
-    async def aembed_text(self, text: str) -> List[float]:
+    async def aembed_text(self, text: str) -> list[float]:
         """Offloads CPU encoding to thread pool to prevent blocking FastAPI's async event loop."""
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.embed_text, text)
 
-    async def aembed_batch(self, texts: List[str]) -> List[List[float]]:
+    async def aembed_batch(self, texts: list[str]) -> list[list[float]]:
         """Batch embedding offloaded to thread pool."""
         loop = asyncio.get_running_loop()
         def _batch_encode():
@@ -56,7 +58,7 @@ class SentenceTransformerEmbeddingService(BaseEmbeddingService):
 
 
 # Singleton factory for global reuse
-_global_embedding_service: Optional[SentenceTransformerEmbeddingService] = None
+_global_embedding_service: SentenceTransformerEmbeddingService | None = None
 
 def get_embedding_service() -> SentenceTransformerEmbeddingService:
     global _global_embedding_service

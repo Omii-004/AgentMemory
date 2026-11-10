@@ -1,11 +1,18 @@
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
 from sqlalchemy import func, or_, select
 
-from app.database.models.memory import Memory, MemoryEvent, MemoryFact, MemoryRelation, MemoryVersion
+from app.database.models.memory import (
+    Memory,
+    MemoryEvent,
+    MemoryFact,
+    MemoryRelation,
+    MemoryVersion,
+)
 from app.memory.base import BaseMemory
 from app.memory.lifecycle import ensure_utc, purge_memory_record, purge_namespace_memories
 from app.memory.schemas import MemoryItem, RetrievedMemory
@@ -50,15 +57,15 @@ class StructuredMemory(BaseMemory):
     def _get_reference_time(self) -> tuple[datetime, bool]:
         as_of = self.config.get("as_of")
         if isinstance(as_of, datetime):
-            return ensure_utc(as_of) or datetime.now(timezone.utc), True
+            return ensure_utc(as_of) or datetime.now(UTC), True
         if isinstance(as_of, str) and as_of.strip():
-            parsed = datetime.fromisoformat(as_of.strip().replace("Z", "+00:00"))
-            return ensure_utc(parsed) or datetime.now(timezone.utc), True
-        return datetime.now(timezone.utc), False
+            parsed = datetime.fromisoformat(as_of.strip())
+            return ensure_utc(parsed) or datetime.now(UTC), True
+        return datetime.now(UTC), False
 
     async def _store_internal(self, item: MemoryItem) -> list[str]:
         memory_id = uuid.uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if item.subject and item.predicate and item.object_value:
             sub, pred, obj = item.subject.strip(), item.predicate.strip(), item.object_value.strip()
@@ -275,7 +282,7 @@ class StructuredMemory(BaseMemory):
                     subject=sub,
                     predicate=pred,
                     object_value=obj,
-                    valid_from=ensure_utc(new_item.valid_from) or datetime.now(timezone.utc),
+                    valid_from=ensure_utc(new_item.valid_from) or datetime.now(UTC),
                     valid_to=ensure_utc(new_item.valid_to),
                     confidence=Decimal(str(new_item.confidence)) if new_item.confidence is not None else None,
                 )

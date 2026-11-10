@@ -1,4 +1,3 @@
-from typing import List, Optional
 from app.memory.schemas import RetrievedMemory
 
 
@@ -16,7 +15,7 @@ class ContextBuilder:
     )
 
     @classmethod
-    def build_prompt(cls, query: str, memories: List[RetrievedMemory]) -> str:
+    def build_prompt(cls, query: str, memories: list[RetrievedMemory]) -> str:
         """Formats retrieved memories into structured prompt context."""
         if not memories:
             return f"Question: {query}\nAnswer:"

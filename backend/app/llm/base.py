@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +12,7 @@ class LLMResponse(BaseModel):
     total_tokens: int = 0
     latency_ms: float = 0.0
     model_name: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class BaseLLMAdapter(ABC):
@@ -25,9 +26,8 @@ class BaseLLMAdapter(ABC):
     async def generate(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
         max_tokens: int = 512,
         temperature: float = 0.0
     ) -> LLMResponse:
         """Asynchronously generates text from the model."""
-        pass

@@ -1,7 +1,9 @@
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.database.models.evaluation import ExecutionTrace
 
 
@@ -19,9 +21,9 @@ class TraceCollector:
         self,
         event_type: str,
         component: str,
-        event_data: Optional[Dict[str, Any]] = None,
-        task_result_id: Optional[uuid.UUID] = None,
-        duration_ms: Optional[float] = None
+        event_data: dict[str, Any] | None = None,
+        task_result_id: uuid.UUID | None = None,
+        duration_ms: float | None = None
     ) -> ExecutionTrace:
         """Persists a trace event to the execution_traces table."""
         trace = ExecutionTrace(

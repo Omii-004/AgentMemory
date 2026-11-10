@@ -1,5 +1,7 @@
 import re
 import time
+from typing import Any
+
 from app.llm.base import BaseLLMAdapter, LLMResponse
 
 _INDEXED_LINE_RE = re.compile(r"^\[\d+\]\s+(.+)$")
@@ -19,6 +21,9 @@ class MockLLMAdapter(BaseLLMAdapter):
     Extracts relevant retrieved memories from ContextBuilder prompts ([1] ...) or bulleted prompts (- / *)
     without ground-truth access, enabling realistic offline benchmark pipeline verification.
     """
+
+    def __init__(self, model_name: str | None = None, **kwargs: Any):
+        super().__init__(model_name=model_name or "mock-model", **kwargs)
 
     @staticmethod
     def _extract_candidates_and_question(prompt: str) -> tuple[list[str], str]:
@@ -49,7 +54,7 @@ class MockLLMAdapter(BaseLLMAdapter):
             idx_match = _INDEXED_LINE_RE.match(line)
             if idx_match:
                 candidates.append(idx_match.group(1).strip())
-            elif line.startswith("- ") or line.startswith("* "):
+            elif line.startswith(("- ", "* ")):
                 candidates.append(line[2:].strip())
 
         return candidates, " ".join(question_lines).strip()

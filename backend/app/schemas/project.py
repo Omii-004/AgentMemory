@@ -1,18 +1,19 @@
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ProjectUpdate(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=200)
-    description: Optional[str] = None
-    status: Optional[str] = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = None
+    status: str | None = None
 
 
 class ProjectResponse(BaseModel):
@@ -20,14 +21,14 @@ class ProjectResponse(BaseModel):
     id: uuid.UUID
     owner_id: uuid.UUID
     name: str
-    description: Optional[str]
+    description: str | None
     status: str
     created_at: datetime
     updated_at: datetime
 
 
 class SessionCreate(BaseModel):
-    name: Optional[str] = Field(default=None, max_length=200)
+    name: str | None = Field(default=None, max_length=200)
     session_type: str = "conversation"
 
 
@@ -35,7 +36,7 @@ class SessionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     project_id: uuid.UUID
-    name: Optional[str]
+    name: str | None
     session_type: str
     created_at: datetime
 
@@ -43,7 +44,7 @@ class SessionResponse(BaseModel):
 class MessageCreate(BaseModel):
     role: str = Field(default="user", pattern="^(user|assistant|system|tool)$")
     content: str = Field(min_length=1)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class MessageResponse(BaseModel):

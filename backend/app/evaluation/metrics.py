@@ -1,5 +1,5 @@
-import math
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 import numpy as np
 
 
@@ -10,7 +10,7 @@ class MetricsCalculator:
     """
 
     @staticmethod
-    def precision_at_k(retrieved_ids: List[str], relevant_ids: List[str], k: int = 5) -> float:
+    def precision_at_k(retrieved_ids: list[str], relevant_ids: list[str], k: int = 5) -> float:
         if not retrieved_ids or k <= 0:
             return 0.0
         top_k = retrieved_ids[:k]
@@ -19,7 +19,7 @@ class MetricsCalculator:
         return hits / len(top_k)
 
     @staticmethod
-    def recall_at_k(retrieved_ids: List[str], relevant_ids: List[str], k: int = 5) -> float:
+    def recall_at_k(retrieved_ids: list[str], relevant_ids: list[str], k: int = 5) -> float:
         if not relevant_ids:
             return 1.0  # If no specific evidence is required, recall is trivially satisfied
         top_k = retrieved_ids[:k]
@@ -28,7 +28,7 @@ class MetricsCalculator:
         return hits / len(relevant_set)
 
     @staticmethod
-    def reciprocal_rank(retrieved_ids: List[str], relevant_ids: List[str]) -> float:
+    def reciprocal_rank(retrieved_ids: list[str], relevant_ids: list[str]) -> float:
         relevant_set = set(relevant_ids)
         for rank, doc_id in enumerate(retrieved_ids, start=1):
             if doc_id in relevant_set:
@@ -38,10 +38,10 @@ class MetricsCalculator:
     @classmethod
     def calculate_aggregate_metrics(
         cls,
-        task_records: List[Dict[str, Any]],
+        task_records: list[dict[str, Any]],
         lambda_tokens: float = 0.0001,
-        mu_latency: float = 0.001
-    ) -> Dict[str, Any]:
+        mu_latency: float = 0.001,
+    ) -> dict[str, Any]:
         """
         Aggregates per-task results into architecture-level metrics:
         - Task Success Rate (TSR %)
@@ -57,12 +57,15 @@ class MetricsCalculator:
         correct_count = sum(1 for r in task_records if r.get("is_correct"))
         tsr = (correct_count / total) * 100.0
 
-        precisions, recalls, rrs = [], [], []
-        ret_latencies, llm_latencies, total_latencies = [], [], []
-        tokens_list = []
+        precisions: list[float] = []
+        recalls: list[float] = []
+        rrs: list[float] = []
+        ret_latencies: list[float] = []
+        llm_latencies: list[float] = []
+        total_latencies: list[float] = []
+        tokens_list: list[int] = []
 
-        # Category counters
-        category_stats: Dict[str, Dict[str, int]] = {}
+        category_stats: dict[str, dict[str, int]] = {}
 
         for rec in task_records:
             cat = rec.get("category", "general")
@@ -72,7 +75,6 @@ class MetricsCalculator:
             if rec.get("is_correct"):
                 category_stats[cat]["correct"] += 1
 
-            # Retrieval metrics (only where required memory references exist)
             req_ids = rec.get("required_memory_ids") or []
             ret_ids = rec.get("retrieved_memory_ids") or []
             if req_ids:
@@ -91,11 +93,8 @@ class MetricsCalculator:
 
         avg_tokens = float(np.mean(tokens_list)) if tokens_list else 0.0
         avg_total_latency = float(np.mean(total_latencies)) if total_latencies else 0.0
-
-        # Experimental Composite Metric: Memory Utility = TSR / (1 + lambda*T + mu*L)
         memory_utility = tsr / (1.0 + (lambda_tokens * avg_tokens) + (mu_latency * avg_total_latency))
 
-        # Per-category accuracies
         category_accuracies = {
             cat: round((vals["correct"] / vals["total"]) * 100.0, 2)
             for cat, vals in category_stats.items() if vals["total"] > 0
