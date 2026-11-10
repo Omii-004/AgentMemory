@@ -1,16 +1,16 @@
 import uuid
-from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, Query, status
+from typing import Annotated, Any
+from fastapi import APIRouter, Body, Depends, Query, status
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.memory.consolidation import ConsolidationResult, MemoryConsolidator
-from pydantic import BaseModel
 from app.api.dependencies import get_current_user, get_project_for_user
-from app.core.exceptions import NotFoundException
+from app.core.exceptions import ConflictException, MemoryOperationException, NotFoundException
 from app.database.connection import get_db
 from app.database.models.memory import Memory, MemoryEvent, MemoryNamespace, MemoryVersion
 from app.database.models.user import Project, User
+from app.memory.consolidation import ConsolidationResult, MemoryConsolidator
 from app.memory.factory import get_memory_architecture
 from app.memory.schemas import MemoryItem, MemoryOperationResult
 from app.schemas.common import APIResponse
@@ -29,7 +29,7 @@ from app.schemas.memory import (
 router = APIRouter(tags=["Memory & Architectures"])
 
 
-@router.get("/architectures", response_model=APIResponse[List[Dict[str, Any]]])
+@router.get("/architectures", response_model=APIResponse[list[dict[str, Any]]])
 async def list_architectures():
     """Lists all built-in memory architectures and configurable options."""
     data = [
@@ -68,17 +68,26 @@ async def create_namespace(
     return APIResponse(message="Memory namespace created", data=NamespaceResponse.model_validate(ns))
 
 
-@router.get("/projects/{project_id}/memory-namespaces", response_model=APIResponse[List[NamespaceResponse]])
+@router.get("/projects/{project_id}/memory-namespaces", response_model=APIResponse[list[NamespaceResponse]])
 async def list_namespaces(project: Project = Depends(get_project_for_user), db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(MemoryNamespace).where(MemoryNamespace.project_id == project.id))
     return APIResponse(message="Namespaces retrieved", data=[NamespaceResponse.model_validate(n) for n in res.scalars().all()])
 
 
-async def _get_owned_namespace(namespace_id: uuid.UUID, db: AsyncSession, current_user: User) -> MemoryNamespace:
+async def _get_owned_namespace(
+    namespace_id: uuid.UUID,
+    db: AsyncSession,
+    current_user: User,
+    project_id: uuid.UUID | None = None,
+) -> MemoryNamespace:
+    conditions = [MemoryNamespace.id == namespace_id, Project.owner_id == current_user.id]
+    if project_id is not None:
+        conditions.append(MemoryNamespace.project_id == project_id)
+
     stmt = (
         select(MemoryNamespace)
         .join(Project, MemoryNamespace.project_id == Project.id)
-        .where(MemoryNamespace.id == namespace_id, Project.owner_id == current_user.id)
+        .where(*conditions)
     )
     res = await db.execute(stmt)
     ns = res.scalars().first()
@@ -120,20 +129,23 @@ class ConsolidateRequest(BaseModel):
 @router.post("/memory-namespaces/{namespace_id}/consolidate", response_model=APIResponse[ConsolidationResult])
 async def consolidate_namespace(
     namespace_id: uuid.UUID,
-    payload: ConsolidateRequest = ConsolidateRequest(),
+    payload: Annotated[ConsolidateRequest | None, Body()] = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Triggers memory consolidation for all active memories in a namespace."""
+    req = payload or ConsolidateRequest()
     ns = await _get_owned_namespace(namespace_id, db, current_user)
     consolidator = MemoryConsolidator(db=db, namespace_id=ns.id)
     res = await consolidator.consolidate(
-        min_memories=payload.min_memories,
-        llm_provider=payload.llm_provider,
+        min_memories=req.min_memories,
+        llm_provider=req.llm_provider,
     )
+    if res.status == "error":
+        raise MemoryOperationException("Memory consolidation failed.")
     return APIResponse(message="Memory consolidation executed", data=res)
 
-    
+
 @router.post("/projects/{project_id}/memories", response_model=APIResponse[MemoryOperationResult], status_code=status.HTTP_201_CREATED)
 async def store_memory(
     payload: MemoryStoreRequest,
@@ -141,7 +153,7 @@ async def store_memory(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ns = await _get_owned_namespace(payload.namespace_id, db, current_user)
+    ns = await _get_owned_namespace(payload.namespace_id, db, current_user, project_id=project.id)
     engine = get_memory_architecture(ns.architecture_type, db, ns.id, ns.config)
     result = await engine.store(
         MemoryItem(
@@ -155,6 +167,8 @@ async def store_memory(
             metadata=payload.metadata,
         )
     )
+    if result.status == "error":
+        raise MemoryOperationException(result.error_message or "Failed to store memory.")
     return APIResponse(message="Memory stored", data=result)
 
 
@@ -165,13 +179,15 @@ async def retrieve_memories(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ns = await _get_owned_namespace(payload.namespace_id, db, current_user)
+    ns = await _get_owned_namespace(payload.namespace_id, db, current_user, project_id=project.id)
     engine = get_memory_architecture(ns.architecture_type, db, ns.id, ns.config)
     result = await engine.retrieve(query=payload.query, top_k=payload.top_k)
+    if result.status == "error":
+        raise MemoryOperationException(result.error_message or "Failed to retrieve memories.")
     return APIResponse(message="Memories retrieved", data=result)
 
 
-@router.get("/projects/{project_id}/memories", response_model=APIResponse[List[MemoryResponse]])
+@router.get("/projects/{project_id}/memories", response_model=APIResponse[list[MemoryResponse]])
 async def list_memories(
     namespace_id: uuid.UUID = Query(...),
     status_filter: str = Query(default="active"),
@@ -179,8 +195,12 @@ async def list_memories(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    ns = await _get_owned_namespace(namespace_id, db, current_user)
-    stmt = select(Memory).where(Memory.namespace_id == ns.id, Memory.status == status_filter).order_by(Memory.created_at.desc())
+    ns = await _get_owned_namespace(namespace_id, db, current_user, project_id=project.id)
+    stmt = (
+        select(Memory)
+        .where(Memory.namespace_id == ns.id, Memory.status == status_filter)
+        .order_by(Memory.created_at.desc())
+    )
     res = await db.execute(stmt)
     return APIResponse(message="Memories listed", data=[MemoryResponse.model_validate(m) for m in res.scalars().all()])
 
@@ -223,6 +243,10 @@ async def update_memory(
             metadata={"change_reason": payload.change_reason},
         ),
     )
+    if res.status == "error":
+        raise MemoryOperationException(res.error_message or "Failed to update memory.")
+    if res.status != "success":
+        raise ConflictException(f"Memory '{mem.id}' cannot be updated in '{mem.status}' status.")
     return APIResponse(message="Memory updated", data=res)
 
 
@@ -233,10 +257,14 @@ async def delete_memory(
     mem, ns = await _get_owned_memory(memory_id, db, current_user)
     engine = get_memory_architecture(ns.architecture_type, db, ns.id, ns.config)
     res = await engine.delete(str(mem.id))
+    if res.status == "error":
+        raise MemoryOperationException(res.error_message or "Failed to delete memory.")
+    if res.status != "success":
+        raise ConflictException(f"Memory '{mem.id}' cannot be deleted in '{mem.status}' status.")
     return APIResponse(message="Memory deleted and purged", data=res)
 
 
-@router.get("/memories/{memory_id}/versions", response_model=APIResponse[List[MemoryVersionResponse]])
+@router.get("/memories/{memory_id}/versions", response_model=APIResponse[list[MemoryVersionResponse]])
 async def get_memory_versions(
     memory_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -245,7 +273,7 @@ async def get_memory_versions(
     return APIResponse(message="Memory version history retrieved", data=[MemoryVersionResponse.model_validate(v) for v in res.scalars().all()])
 
 
-@router.get("/memories/{memory_id}/events", response_model=APIResponse[List[MemoryEventResponse]])
+@router.get("/memories/{memory_id}/events", response_model=APIResponse[list[MemoryEventResponse]])
 async def get_memory_events(
     memory_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):

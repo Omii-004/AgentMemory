@@ -1,5 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -48,6 +50,21 @@ async def agentmemory_exception_handler(request: Request, exc: AgentMemoryExcept
     )
 
 
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "success": False,
+            "error": {
+                "code": "AM_ERR_VALIDATION_FAILED",
+                "message": "Input validation failed.",
+                "details": {"errors": jsonable_encoder(exc.errors())},
+            },
+        },
+    )
+
+
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
@@ -55,6 +72,22 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         content={
             "success": False,
             "error": {"code": f"HTTP_{exc.status_code}", "message": str(exc.detail), "details": None},
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error during request %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": {
+                "code": "AM_ERR_INTERNAL_ERROR",
+                "message": "An unexpected internal error occurred.",
+                "details": None,
+            },
         },
     )
 
