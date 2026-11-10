@@ -1,14 +1,16 @@
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.benchmark.schemas import BenchmarkTaskSchema
+
+_ALLOWED_LLM_PROVIDERS = {"mock", "ollama", "openai", "openai_compatible", "openai-compatible"}
 
 
 class DatasetCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     version: str = "1.0.0"
-    description: Optional[str] = None
+    description: str | None = None
     is_public: bool = False
 
 
@@ -18,7 +20,7 @@ class DatasetResponse(BaseModel):
     project_id: uuid.UUID
     name: str
     version: str
-    description: Optional[str]
+    description: str | None
     task_count: int
     is_public: bool
     created_at: datetime
@@ -31,7 +33,7 @@ class SyntheticGenerateRequest(BaseModel):
 
 
 class BulkTaskImportRequest(BaseModel):
-    tasks: List[BenchmarkTaskSchema]
+    tasks: list[BenchmarkTaskSchema] = Field(min_length=1, max_length=1000)
 
 
 class TaskResponse(BaseModel):
@@ -41,25 +43,57 @@ class TaskResponse(BaseModel):
     task_key: str
     category: str
     difficulty: str
-    conversation_sequence: List[Dict[str, Any]]
-    evaluation_query: Dict[str, Any]
+    conversation_sequence: list[dict[str, Any]]
+    evaluation_query: dict[str, Any]
     created_at: datetime
 
 
 class ExperimentCreate(BaseModel):
     dataset_id: uuid.UUID
     name: str = Field(min_length=1, max_length=200)
-    description: Optional[str] = None
-    architectures: List[str] = Field(default=["history", "vector", "structured", "hybrid"])
+    description: str | None = None
+    architectures: list[str] = Field(
+        default_factory=lambda: ["history", "vector", "structured", "hybrid"],
+        min_length=1,
+    )
     llm_provider: str = "mock"
-    llm_model: Optional[str] = None
+    llm_model: str | None = None
     num_trials: int = Field(default=1, ge=1, le=10)
-    architecture_configs: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    max_tokens: int = Field(default=512, ge=16, le=8192)
+    architecture_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+
+    @field_validator("architectures")
+    @classmethod
+    def validate_unique_architectures(cls, value: list[str]) -> list[str]:
+        if not value:
+            raise ValueError("At least one memory architecture must be selected.")
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            arch = raw.strip().lower()
+            if not arch:
+                raise ValueError("Architecture name cannot be blank.")
+            if arch in seen:
+                raise ValueError(f"Duplicate architecture '{arch}' is not allowed.")
+            seen.add(arch)
+            normalized.append(arch)
+        return normalized
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, value: str) -> str:
+        provider = value.strip().lower()
+        if provider not in _ALLOWED_LLM_PROVIDERS:
+            raise ValueError(
+                f"Unsupported llm_provider '{value}'. Allowed: {sorted(_ALLOWED_LLM_PROVIDERS)}"
+            )
+        return provider
 
 
 class ExperimentUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    description: str | None = None
 
 
 class ExperimentResponse(BaseModel):
@@ -68,14 +102,14 @@ class ExperimentResponse(BaseModel):
     project_id: uuid.UUID
     dataset_id: uuid.UUID
     name: str
-    description: Optional[str]
-    configuration: Dict[str, Any]
+    description: str | None
+    configuration: dict[str, Any]
     status: str
     created_at: datetime
 
 
 class RunStartRequest(BaseModel):
-    random_seed: Optional[int] = 42
+    random_seed: int | None = 42
 
 
 class RunResponse(BaseModel):
@@ -84,10 +118,10 @@ class RunResponse(BaseModel):
     experiment_id: uuid.UUID
     run_number: int
     status: str
-    random_seed: Optional[int]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    error_message: Optional[str]
+    random_seed: int | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    error_message: str | None
     created_at: datetime
 
 
@@ -97,10 +131,10 @@ class RunArchitectureResponse(BaseModel):
     run_id: uuid.UUID
     namespace_id: uuid.UUID
     architecture_type: str
-    configuration: Dict[str, Any]
+    configuration: dict[str, Any]
     status: str
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
 
 
 class TaskResultResponse(BaseModel):
@@ -109,15 +143,15 @@ class TaskResultResponse(BaseModel):
     run_architecture_id: uuid.UUID
     task_id: uuid.UUID
     trial_number: int
-    generated_answer: Optional[Dict[str, Any]]
+    generated_answer: dict[str, Any] | None
     task_status: str
-    is_correct: Optional[bool]
-    retrieval_latency_ms: Optional[float]
-    llm_latency_ms: Optional[float]
-    total_latency_ms: Optional[float]
-    total_tokens: Optional[int]
-    retrieved_memory_ids: Optional[List[str]]
-    evaluation_details: Dict[str, Any]
+    is_correct: bool | None
+    retrieval_latency_ms: float | None
+    llm_latency_ms: float | None
+    total_latency_ms: float | None
+    total_tokens: int | None
+    retrieved_memory_ids: list[str] | None
+    evaluation_details: dict[str, Any]
 
 
 class MetricResultResponse(BaseModel):
@@ -126,19 +160,19 @@ class MetricResultResponse(BaseModel):
     run_architecture_id: uuid.UUID
     metric_name: str
     metric_value: float
-    metric_unit: Optional[str]
-    category: Optional[str]
+    metric_unit: str | None
+    category: str | None
 
 
 class ExecutionTraceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     run_id: uuid.UUID
-    task_result_id: Optional[uuid.UUID]
+    task_result_id: uuid.UUID | None
     event_type: str
     component: str
-    event_data: Dict[str, Any]
-    duration_ms: Optional[float]
+    event_data: dict[str, Any]
+    duration_ms: float | None
     created_at: datetime
 
 
@@ -152,6 +186,6 @@ class ReportResponse(BaseModel):
     project_id: uuid.UUID
     run_id: uuid.UUID
     report_type: str
-    file_location: Optional[str]
+    file_location: str | None
     status: str
     created_at: datetime

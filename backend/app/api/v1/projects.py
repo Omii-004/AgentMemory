@@ -85,7 +85,7 @@ async def update_project(
     return APIResponse(message="Project updated successfully", data=ProjectResponse.model_validate(project))
 
 
-@router.delete("/projects/{project_id}", response_model=APIResponse[dict])
+@router.delete("/projects/{project_id}", response_model=APIResponse[dict[str, str]])
 async def delete_project(project: Project = Depends(get_project_for_user), db: AsyncSession = Depends(get_db)):
     await db.delete(project)
     await db.commit()
@@ -143,8 +143,12 @@ async def add_message(
     current_user: User = Depends(get_current_user),
 ):
     session = await _get_owned_session(session_id, db, current_user)
-    count_res = await db.execute(select(func.count(Message.id)).where(Message.session_id == session.id))
-    next_seq = (count_res.scalar() or 0) + 1
+    max_seq_res = await db.execute(
+        select(func.coalesce(func.max(Message.sequence_number), 0)).where(
+            Message.session_id == session.id
+        )
+    )
+    next_seq = int(max_seq_res.scalar() or 0) + 1
 
     msg = Message(
         session_id=session.id,

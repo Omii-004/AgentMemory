@@ -164,6 +164,8 @@ async def store_memory(
             subject=payload.subject,
             predicate=payload.predicate,
             object_value=payload.object_value,
+            valid_from=payload.valid_from,
+            valid_to=payload.valid_to,
             metadata=payload.metadata,
         )
     )
@@ -180,7 +182,10 @@ async def retrieve_memories(
     current_user: User = Depends(get_current_user),
 ):
     ns = await _get_owned_namespace(payload.namespace_id, db, current_user, project_id=project.id)
-    engine = get_memory_architecture(ns.architecture_type, db, ns.id, ns.config)
+    runtime_config = dict(ns.config or {})
+    if payload.as_of is not None:
+        runtime_config["as_of"] = payload.as_of.isoformat()
+    engine = get_memory_architecture(ns.architecture_type, db, ns.id, runtime_config)
     result = await engine.retrieve(query=payload.query, top_k=payload.top_k)
     if result.status == "error":
         raise MemoryOperationException(result.error_message or "Failed to retrieve memories.")
@@ -240,6 +245,11 @@ async def update_memory(
             content=payload.content,
             importance=payload.importance,
             confidence=payload.confidence,
+            subject=payload.subject,
+            predicate=payload.predicate,
+            object_value=payload.object_value,
+            valid_from=payload.valid_from,
+            valid_to=payload.valid_to,
             metadata={"change_reason": payload.change_reason},
         ),
     )

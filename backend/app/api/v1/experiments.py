@@ -1,15 +1,14 @@
+import asyncio
 import csv
-import io
 import json
-import os
 import uuid
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, status
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.evaluation.stats import StatisticalAnalyzer
 from app.api.dependencies import get_current_user, get_project_for_user
 from app.benchmark.runner import BenchmarkRunner
 from app.core.exceptions import ArchitectureUnsupportedException, ExperimentBusyException, NotFoundException
@@ -19,6 +18,7 @@ from app.database.models.evaluation import ExecutionTrace, MetricResult, Report,
 from app.database.models.experiment import Experiment, ExperimentRun, RunArchitecture
 from app.database.models.memory import MemoryNamespace
 from app.database.models.user import Project, User
+from app.evaluation.stats import StatisticalAnalyzer
 from app.schemas.benchmark import (
     ExecutionTraceResponse,
     ExperimentCreate,
@@ -36,6 +36,38 @@ from app.schemas.common import APIResponse
 
 router = APIRouter(tags=["Experiments, Analytics & Reports"])
 SUPPORTED_ARCHS = {"history", "vector", "structured", "hybrid"}
+REPORTS_DIR = Path(__file__).resolve().parents[4] / "experiment-artifacts" / "reports"
+
+
+def _write_json_report(file_path: Path, payload_data: dict[str, Any]) -> None:
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with file_path.open("w", encoding="utf-8") as f:
+        json.dump(payload_data, f, indent=2, default=str)
+
+
+def _write_csv_report(
+    file_path: Path,
+    architectures: dict[str, Any],
+    stats_data: dict[str, Any],
+    failure_summary: dict[str, dict[str, int]],
+) -> None:
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    with file_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Architecture", "Metric", "Value"])
+        for arch, metrics in architectures.items():
+            for m_name, val in metrics.items():
+                if m_name != "categories":
+                    writer.writerow([arch, m_name, val])
+                else:
+                    for cat, c_val in val.items():
+                        writer.writerow([arch, f"category_{cat}", c_val])
+        for arch, ci in stats_data.get("descriptive_ci_95", {}).items():
+            writer.writerow([arch, "ci_95_low", ci.get("ci_low", 0.0)])
+            writer.writerow([arch, "ci_95_high", ci.get("ci_high", 0.0)])
+        for arch, counts in failure_summary.items():
+            for label, cnt in counts.items():
+                writer.writerow([arch, f"failure_{label}", cnt])
 
 
 async def _run_benchmark_background(run_id: uuid.UUID) -> None:
@@ -93,6 +125,8 @@ async def create_experiment(
         "llm_provider": payload.llm_provider,
         "llm_model": payload.llm_model,
         "num_trials": payload.num_trials,
+        "temperature": payload.temperature,
+        "max_tokens": payload.max_tokens,
         "architecture_configs": payload.architecture_configs,
     }
     exp = Experiment(
@@ -109,7 +143,7 @@ async def create_experiment(
     return APIResponse(message="Experiment created", data=ExperimentResponse.model_validate(exp))
 
 
-@router.get("/projects/{project_id}/experiments", response_model=APIResponse[List[ExperimentResponse]])
+@router.get("/projects/{project_id}/experiments", response_model=APIResponse[list[ExperimentResponse]])
 async def list_experiments(project: Project = Depends(get_project_for_user), db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(Experiment).where(Experiment.project_id == project.id).order_by(Experiment.created_at.desc()))
     return APIResponse(message="Experiments retrieved", data=[ExperimentResponse.model_validate(e) for e in res.scalars().all()])
@@ -140,7 +174,7 @@ async def update_experiment(
     return APIResponse(message="Experiment updated", data=ExperimentResponse.model_validate(exp))
 
 
-@router.delete("/experiments/{experiment_id}", response_model=APIResponse[dict])
+@router.delete("/experiments/{experiment_id}", response_model=APIResponse[dict[str, str]])
 async def delete_experiment(
     experiment_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -159,8 +193,12 @@ async def start_experiment_run(
     current_user: User = Depends(get_current_user),
 ):
     exp = await _get_owned_experiment(experiment_id, db, current_user)
-    count_res = await db.execute(select(func.count(ExperimentRun.id)).where(ExperimentRun.experiment_id == exp.id))
-    next_run_num = (count_res.scalar() or 0) + 1
+    max_run_res = await db.execute(
+        select(func.coalesce(func.max(ExperimentRun.run_number), 0)).where(
+            ExperimentRun.experiment_id == exp.id
+        )
+    )
+    next_run_num = int(max_run_res.scalar() or 0) + 1
 
     run = ExperimentRun(
         experiment_id=exp.id,
@@ -171,7 +209,6 @@ async def start_experiment_run(
     db.add(run)
     await db.flush()
 
-    # Create isolated MemoryNamespace and RunArchitecture for each selected architecture
     archs = exp.configuration.get("architectures", ["history", "vector", "structured", "hybrid"])
     arch_configs = exp.configuration.get("architecture_configs", {})
 
@@ -200,7 +237,6 @@ async def start_experiment_run(
     await db.commit()
     await db.refresh(run)
 
-    # Dispatch execution asynchronously
     background_tasks.add_task(_run_benchmark_background, run.id)
     return APIResponse(message="Benchmark run queued and started", data=RunResponse.model_validate(run))
 
@@ -217,35 +253,61 @@ async def cancel_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), curr
     if run.status in ("completed", "failed", "cancelled"):
         raise ExperimentBusyException(f"Cannot cancel run already in '{run.status}' state.")
     run.status = "cancelled"
+
+    pending_res = await db.execute(
+        select(RunArchitecture).where(RunArchitecture.run_id == run.id, RunArchitecture.status == "pending")
+    )
+    for ra in pending_res.scalars().all():
+        ra.status = "cancelled"
+
     await db.commit()
     await db.refresh(run)
     return APIResponse(message="Run cancelled", data=RunResponse.model_validate(run))
 
 
-@router.get("/runs/{run_id}/architectures", response_model=APIResponse[List[RunArchitectureResponse]])
+@router.get("/runs/{run_id}/architectures", response_model=APIResponse[list[RunArchitectureResponse]])
 async def list_run_architectures(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     res = await db.execute(select(RunArchitecture).where(RunArchitecture.run_id == run.id))
     return APIResponse(message="Run architectures retrieved", data=[RunArchitectureResponse.model_validate(ra) for ra in res.scalars().all()])
 
 
-@router.get("/runs/{run_id}/configuration", response_model=APIResponse[Dict[str, Any]])
+@router.get("/runs/{run_id}/configuration", response_model=APIResponse[dict[str, Any]])
 async def get_run_configuration(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, exp = await _get_owned_run(run_id, db, current_user)
+    arch_res = await db.execute(
+        select(RunArchitecture).where(RunArchitecture.run_id == run.id).order_by(RunArchitecture.created_at.asc())
+    )
+    frozen_architectures = [
+        {
+            "architecture_type": ra.architecture_type,
+            "namespace_id": str(ra.namespace_id),
+            "configuration": ra.configuration,
+            "status": ra.status,
+        }
+        for ra in arch_res.scalars().all()
+    ]
     return APIResponse(
         message="Run configuration snapshot",
-        data={"run_id": str(run.id), "random_seed": run.random_seed, "software_version": run.software_version, "experiment_config": exp.configuration},
+        data={
+            "run_id": str(run.id),
+            "run_number": run.run_number,
+            "random_seed": run.random_seed,
+            "software_version": run.software_version,
+            "architectures": frozen_architectures,
+            "experiment_config": exp.configuration,
+        },
     )
 
 
-@router.get("/runs/{run_id}/results", response_model=APIResponse[List[TaskResultResponse]])
+@router.get("/runs/{run_id}/results", response_model=APIResponse[list[TaskResultResponse]])
 async def get_run_results(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     res = await db.execute(select(TaskResult).where(TaskResult.run_id == run.id).order_by(TaskResult.created_at.asc()))
     return APIResponse(message="Task results retrieved", data=[TaskResultResponse.model_validate(tr) for tr in res.scalars().all()])
 
 
-@router.get("/runs/{run_id}/metrics", response_model=APIResponse[List[MetricResultResponse]])
+@router.get("/runs/{run_id}/metrics", response_model=APIResponse[list[MetricResultResponse]])
 async def get_run_metrics(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     stmt = (
@@ -257,17 +319,17 @@ async def get_run_metrics(run_id: uuid.UUID, db: AsyncSession = Depends(get_db),
     return APIResponse(message="Run metrics retrieved", data=[MetricResultResponse.model_validate(m) for m in res.scalars().all()])
 
 
-@router.get("/runs/{run_id}/comparison", response_model=APIResponse[Dict[str, Any]])
+@router.get("/runs/{run_id}/comparison", response_model=APIResponse[dict[str, Any]])
 async def compare_architectures(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Produces a clean side-by-side comparison matrix across all evaluated architectures."""
     run, _ = await _get_owned_run(run_id, db, current_user)
     arch_res = await db.execute(select(RunArchitecture).where(RunArchitecture.run_id == run.id))
     run_archs = arch_res.scalars().all()
 
-    comparison: Dict[str, Any] = {}
+    comparison: dict[str, Any] = {}
     for ra in run_archs:
         m_res = await db.execute(select(MetricResult).where(MetricResult.run_architecture_id == ra.id))
-        metrics_data: Dict[str, Any] = {"categories": {}}
+        metrics_data: dict[str, Any] = {"categories": {}}
         for m in m_res.scalars().all():
             if m.category:
                 metrics_data["categories"][m.category] = float(m.metric_value)
@@ -278,7 +340,7 @@ async def compare_architectures(run_id: uuid.UUID, db: AsyncSession = Depends(ge
     return APIResponse(message="Architecture comparison generated", data={"run_id": str(run.id), "status": run.status, "architectures": comparison})
 
 
-@router.get("/runs/{run_id}/statistics", response_model=APIResponse[Dict[str, Any]])
+@router.get("/runs/{run_id}/statistics", response_model=APIResponse[dict[str, Any]])
 async def get_run_statistics(
     run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -290,7 +352,7 @@ async def get_run_statistics(
         .where(RunArchitecture.run_id == run.id)
     )
     res = await db.execute(stmt)
-    arch_results: Dict[str, Dict[str, float]] = {}
+    arch_results: dict[str, dict[str, float]] = {}
     for arch_type, tr in res.all():
         key = f"{tr.task_id}_{tr.trial_number}"
         arch_results.setdefault(arch_type, {})[key] = 1.0 if tr.is_correct else 0.0
@@ -298,8 +360,8 @@ async def get_run_statistics(
     analysis = StatisticalAnalyzer.analyze_run(arch_results)
     return APIResponse(message="Statistical significance analysis completed", data=analysis)
 
-    
-@router.get("/runs/{run_id}/metrics/by-category", response_model=APIResponse[Dict[str, Any]])
+
+@router.get("/runs/{run_id}/metrics/by-category", response_model=APIResponse[dict[str, Any]])
 async def get_metrics_by_category(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     stmt = (
@@ -308,13 +370,15 @@ async def get_metrics_by_category(run_id: uuid.UUID, db: AsyncSession = Depends(
         .where(RunArchitecture.run_id == run.id, MetricResult.category.isnot(None))
     )
     res = await db.execute(stmt)
-    breakdown: Dict[str, Dict[str, float]] = {}
+    breakdown: dict[str, dict[str, float]] = {}
     for arch_type, metric in res.all():
+        if not metric.category:
+            continue
         breakdown.setdefault(metric.category, {})[arch_type] = float(metric.metric_value)
     return APIResponse(message="Category metrics retrieved", data=breakdown)
 
 
-@router.get("/runs/{run_id}/failures", response_model=APIResponse[List[Dict[str, Any]]])
+@router.get("/runs/{run_id}/failures", response_model=APIResponse[list[dict[str, Any]]])
 async def get_failure_analysis(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     stmt = (
@@ -336,7 +400,7 @@ async def get_failure_analysis(run_id: uuid.UUID, db: AsyncSession = Depends(get
     return APIResponse(message="Failure analysis retrieved", data=failures)
 
 
-@router.get("/runs/{run_id}/traces", response_model=APIResponse[List[ExecutionTraceResponse]])
+@router.get("/runs/{run_id}/traces", response_model=APIResponse[list[ExecutionTraceResponse]])
 async def list_traces(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
     res = await db.execute(select(ExecutionTrace).where(ExecutionTrace.run_id == run.id).order_by(ExecutionTrace.created_at.asc()))
@@ -367,35 +431,58 @@ async def generate_report(
     current_user: User = Depends(get_current_user),
 ):
     run, exp = await _get_owned_run(run_id, db, current_user)
-    reports_dir = os.path.abspath(os.path.join(os.getcwd(), "..", "experiment-artifacts", "reports"))
-    os.makedirs(reports_dir, exist_ok=True)
     report_id = uuid.uuid4()
     ext = payload.report_type
-    file_path = os.path.join(reports_dir, f"report_{run.id}_{report_id}.{ext}")
+    file_path = REPORTS_DIR / f"report_{run.id}_{report_id}.{ext}"
 
-    # Collect comparison metrics & task results
     comp_resp = await compare_architectures(run_id=run.id, db=db, current_user=current_user)
+    stats_resp = await get_run_statistics(run_id=run.id, db=db, current_user=current_user)
+    failures_resp = await get_failure_analysis(run_id=run.id, db=db, current_user=current_user)
+    config_resp = await get_run_configuration(run_id=run.id, db=db, current_user=current_user)
+
+    comp_data = comp_resp.data or {"run_id": str(run.id), "status": run.status, "architectures": {}}
+    stats_data = stats_resp.data or {}
+    failures_data = failures_resp.data or []
+    config_data = config_resp.data or {}
+
+    failure_summary: dict[str, dict[str, int]] = {}
+    for item in failures_data:
+        arch = str(item.get("architecture", "unknown"))
+        label = str(item.get("failure_classification", "Unknown"))
+        arch_bucket = failure_summary.setdefault(arch, {})
+        arch_bucket[label] = arch_bucket.get(label, 0) + 1
+
     if ext == "json":
-        with open(file_path, "w", encoding="utf-8") as f:
-            json.dump(comp_resp.data, f, indent=2)
+        report_payload = {
+            **comp_data,
+            "experiment_id": str(exp.id),
+            "experiment_name": exp.name,
+            "run_number": run.run_number,
+            "random_seed": run.random_seed,
+            "software_version": run.software_version,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "configuration": config_data,
+            "statistical_analysis": stats_data,
+            "failure_summary": failure_summary,
+            "failures": failures_data,
+        }
+        await asyncio.to_thread(_write_json_report, file_path, report_payload)
     else:
-        with open(file_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Architecture", "Metric", "Value"])
-            for arch, metrics in comp_resp.data["architectures"].items():
-                for m_name, val in metrics.items():
-                    if m_name != "categories":
-                        writer.writerow([arch, m_name, val])
-                    else:
-                        for cat, c_val in val.items():
-                            writer.writerow([arch, f"category_{cat}", c_val])
+        await asyncio.to_thread(
+            _write_csv_report,
+            file_path,
+            comp_data.get("architectures", {}),
+            stats_data,
+            failure_summary,
+        )
 
     report = Report(
         id=report_id,
         project_id=exp.project_id,
         run_id=run.id,
         report_type=ext,
-        file_location=file_path,
+        file_location=str(file_path),
         status="completed",
     )
     db.add(report)
@@ -427,8 +514,13 @@ async def download_report(report_id: uuid.UUID, db: AsyncSession = Depends(get_d
     )
     res = await db.execute(stmt)
     report = res.scalars().first()
-    if not report or not report.file_location or not os.path.exists(report.file_location):
+    if not report or not report.file_location:
+        raise NotFoundException("Report file not found.")
+
+    file_path = Path(report.file_location)
+    exists = await asyncio.to_thread(file_path.exists)
+    if not exists:
         raise NotFoundException("Report file not found.")
 
     media = "application/json" if report.report_type == "json" else "text/csv"
-    return FileResponse(path=report.file_location, media_type=media, filename=os.path.basename(report.file_location))
+    return FileResponse(path=str(file_path), media_type=media, filename=file_path.name)
