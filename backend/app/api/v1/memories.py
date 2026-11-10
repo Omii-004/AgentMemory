@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.memory.consolidation import ConsolidationResult, MemoryConsolidator
+from pydantic import BaseModel
 from app.api.dependencies import get_current_user, get_project_for_user
 from app.core.exceptions import NotFoundException
 from app.database.connection import get_db
@@ -110,6 +112,28 @@ async def update_namespace(
     return APIResponse(message="Namespace updated", data=NamespaceResponse.model_validate(ns))
 
 
+class ConsolidateRequest(BaseModel):
+    min_memories: int = 2
+    llm_provider: str | None = None
+
+
+@router.post("/memory-namespaces/{namespace_id}/consolidate", response_model=APIResponse[ConsolidationResult])
+async def consolidate_namespace(
+    namespace_id: uuid.UUID,
+    payload: ConsolidateRequest = ConsolidateRequest(),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Triggers memory consolidation for all active memories in a namespace."""
+    ns = await _get_owned_namespace(namespace_id, db, current_user)
+    consolidator = MemoryConsolidator(db=db, namespace_id=ns.id)
+    res = await consolidator.consolidate(
+        min_memories=payload.min_memories,
+        llm_provider=payload.llm_provider,
+    )
+    return APIResponse(message="Memory consolidation executed", data=res)
+
+    
 @router.post("/projects/{project_id}/memories", response_model=APIResponse[MemoryOperationResult], status_code=status.HTTP_201_CREATED)
 async def store_memory(
     payload: MemoryStoreRequest,

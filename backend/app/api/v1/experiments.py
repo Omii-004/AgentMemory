@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.evaluation.stats import StatisticalAnalyzer
 from app.api.dependencies import get_current_user, get_project_for_user
 from app.benchmark.runner import BenchmarkRunner
 from app.core.exceptions import ArchitectureUnsupportedException, ExperimentBusyException, NotFoundException
@@ -277,6 +278,27 @@ async def compare_architectures(run_id: uuid.UUID, db: AsyncSession = Depends(ge
     return APIResponse(message="Architecture comparison generated", data={"run_id": str(run.id), "status": run.status, "architectures": comparison})
 
 
+@router.get("/runs/{run_id}/statistics", response_model=APIResponse[Dict[str, Any]])
+async def get_run_statistics(
+    run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    """Calculates 95% confidence intervals and pairwise significance tests (t-test, Wilcoxon, Cohen's d)."""
+    run, _ = await _get_owned_run(run_id, db, current_user)
+    stmt = (
+        select(RunArchitecture.architecture_type, TaskResult)
+        .join(TaskResult, TaskResult.run_architecture_id == RunArchitecture.id)
+        .where(RunArchitecture.run_id == run.id)
+    )
+    res = await db.execute(stmt)
+    arch_results: Dict[str, Dict[str, float]] = {}
+    for arch_type, tr in res.all():
+        key = f"{tr.task_id}_{tr.trial_number}"
+        arch_results.setdefault(arch_type, {})[key] = 1.0 if tr.is_correct else 0.0
+
+    analysis = StatisticalAnalyzer.analyze_run(arch_results)
+    return APIResponse(message="Statistical significance analysis completed", data=analysis)
+
+    
 @router.get("/runs/{run_id}/metrics/by-category", response_model=APIResponse[Dict[str, Any]])
 async def get_metrics_by_category(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
