@@ -1,9 +1,10 @@
 import math
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,7 +53,7 @@ class HybridMemory(BaseMemory):
         return "hybrid"
 
     def _calculate_recency(self, created_at: datetime, ref_time: datetime | None = None) -> float:
-        now = ref_time or datetime.now(timezone.utc)
+        now = ref_time or datetime.now(UTC)
         created_utc = ensure_utc(created_at) or now
         diff_hours = max(0.0, (now - created_utc).total_seconds() / 3600.0)
         return math.exp(-self.decay_rate * diff_hours)
@@ -60,25 +61,23 @@ class HybridMemory(BaseMemory):
     def _get_reference_time(self) -> tuple[datetime, bool]:
         as_of = self.config.get("as_of")
         if isinstance(as_of, datetime):
-            return ensure_utc(as_of) or datetime.now(timezone.utc), True
+            return ensure_utc(as_of) or datetime.now(UTC), True
         if isinstance(as_of, str) and as_of.strip():
-            parsed = datetime.fromisoformat(as_of.strip().replace("Z", "+00:00"))
-            return ensure_utc(parsed) or datetime.now(timezone.utc), True
-        return datetime.now(timezone.utc), False
+            parsed = datetime.fromisoformat(as_of.strip())
+            return ensure_utc(parsed) or datetime.now(UTC), True
+        return datetime.now(UTC), False
 
     @staticmethod
     def _is_fact_valid_at(fact: MemoryFact, ref_time: datetime) -> bool:
-        vf = ensure_utc(fact.valid_from)
-        vt = ensure_utc(fact.valid_to)
-        if vf is not None and vf > ref_time:
-            return False
-        if vt is not None and vt <= ref_time:
-            return False
-        return True
+      vf = ensure_utc(fact.valid_from)
+      vt = ensure_utc(fact.valid_to)
+      if vf is not None and vf > ref_time:
+          return False
+      return not (vt is not None and vt <= ref_time)
 
     async def _store_internal(self, item: MemoryItem) -> list[str]:
         memory_id = uuid.uuid4()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         valid_from = ensure_utc(item.valid_from) or now
         valid_to = ensure_utc(item.valid_to)
 
@@ -343,7 +342,7 @@ class HybridMemory(BaseMemory):
                     subject=new_item.subject.strip(),
                     predicate=new_item.predicate.strip(),
                     object_value=new_item.object_value.strip(),
-                    valid_from=ensure_utc(new_item.valid_from) or datetime.now(timezone.utc),
+                    valid_from=ensure_utc(new_item.valid_from) or datetime.now(UTC),
                     valid_to=ensure_utc(new_item.valid_to),
                     confidence=Decimal(str(new_item.confidence)) if new_item.confidence is not None else None,
                 )

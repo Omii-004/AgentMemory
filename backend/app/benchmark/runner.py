@@ -1,10 +1,13 @@
 import random
 import time
 import uuid
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.context_builder import ContextBuilder
@@ -22,6 +25,24 @@ from app.observability.trace_collector import TraceCollector
 logger = get_logger(__name__)
 
 
+@dataclass(slots=True)
+class _TaskSnapshot:
+    id: uuid.UUID
+    task_key: str
+    category: str
+    conversation_sequence: list[dict[str, Any]]
+    evaluation_query: dict[str, Any]
+    expected_answer: dict[str, Any]
+
+
+@dataclass(slots=True)
+class _RunArchSnapshot:
+    id: uuid.UUID
+    architecture_type: str
+    namespace_id: uuid.UUID
+    configuration: dict[str, Any]
+
+
 class BenchmarkRunner:
     """
     Core Benchmark Execution Engine (Benchmark Spec Section 8 & SAD Section 4.3).
@@ -33,6 +54,12 @@ class BenchmarkRunner:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def _is_run_cancelled(self, run_id: uuid.UUID) -> bool:
+        status_val = (
+            await self.db.execute(select(ExperimentRun.status).where(ExperimentRun.id == run_id))
+        ).scalar_one_or_none()
+        return status_val == "cancelled"
+
     async def execute_run(self, run_id: uuid.UUID) -> None:
         # 1. Load ExperimentRun and parent Experiment
         run_res = await self.db.execute(select(ExperimentRun).where(ExperimentRun.id == run_id))
@@ -41,7 +68,9 @@ class BenchmarkRunner:
             logger.error("ExperimentRun %s not found.", run_id)
             return
         if run.status in ("running", "completed", "cancelled"):
-            logger.warning("ExperimentRun %s is already '%s'. Skipping duplicate execution.", run_id, run.status)
+            logger.warning(
+                "ExperimentRun %s is already '%s'. Skipping duplicate execution.", run_id, run.status
+            )
             return
 
         exp_res = await self.db.execute(select(Experiment).where(Experiment.id == run.experiment_id))
@@ -52,7 +81,7 @@ class BenchmarkRunner:
             await self.db.commit()
             return
 
-        # 2. Load Benchmark Tasks
+        # 2. Load Benchmark Tasks and snapshot into pure Python objects before commits/rollbacks
         tasks_res = await self.db.execute(
             select(BenchmarkTask)
             .where(BenchmarkTask.dataset_id == experiment.dataset_id)
@@ -65,42 +94,68 @@ class BenchmarkRunner:
             await self.db.commit()
             return
 
-        # 3. Load RunArchitectures
+        task_snapshots = [
+            _TaskSnapshot(
+                id=t.id,
+                task_key=t.task_key,
+                category=t.category,
+                conversation_sequence=[dict(turn) for turn in t.conversation_sequence],
+                evaluation_query=dict(t.evaluation_query),
+                expected_answer=dict(t.expected_answer),
+            )
+            for t in tasks
+        ]
+
+        # 3. Load and snapshot RunArchitectures
         arch_res = await self.db.execute(
             select(RunArchitecture).where(RunArchitecture.run_id == run.id)
         )
-        run_architectures = list(arch_res.scalars().all())
+        arch_snapshots = [
+            _RunArchSnapshot(
+                id=ra.id,
+                architecture_type=ra.architecture_type,
+                namespace_id=ra.namespace_id,
+                configuration=dict(ra.configuration or {}),
+            )
+            for ra in arch_res.scalars().all()
+        ]
+
+        exp_config = dict(experiment.configuration or {})
+        random_seed = run.random_seed
 
         # Mark run as running
         run.status = "running"
-        run.started_at = datetime.now(timezone.utc)
+        run.started_at = datetime.now(UTC)
         await self.db.commit()
 
-        exp_config = experiment.configuration or {}
         llm_provider = exp_config.get("llm_provider", "mock")
         llm_model = exp_config.get("llm_model")
         num_trials = int(exp_config.get("num_trials", 1))
         temperature = float(exp_config.get("temperature", 0.0))
         max_tokens = int(exp_config.get("max_tokens", 512))
-        rng = random.Random(run.random_seed) if run.random_seed is not None else None
+        rng = random.Random(random_seed) if random_seed is not None else None
         trace_collector = TraceCollector(self.db, run_id)
 
         try:
             llm_adapter = get_llm_adapter(provider=llm_provider, model_name=llm_model)
 
-            for run_arch in run_architectures:
-                run_arch_id = run_arch.id
-                arch_type = run_arch.architecture_type
-                namespace_id = run_arch.namespace_id
-                arch_config = run_arch.configuration
+            for arch_snap in arch_snapshots:
+                run_arch_id = arch_snap.id
+                arch_type = arch_snap.architecture_type
+                namespace_id = arch_snap.namespace_id
+                arch_config = arch_snap.configuration
 
                 # Re-check cancellation before starting this architecture
-                await self.db.refresh(run)
-                if run.status == "cancelled":
+                if await self._is_run_cancelled(run_id):
                     break
 
+                run_arch = (
+                    await self.db.execute(
+                        select(RunArchitecture).where(RunArchitecture.id == run_arch_id)
+                    )
+                ).scalars().one()
                 run_arch.status = "running"
-                run_arch.started_at = datetime.now(timezone.utc)
+                run_arch.started_at = datetime.now(UTC)
                 await self.db.commit()
 
                 memory_engine = get_memory_architecture(
@@ -114,22 +169,20 @@ class BenchmarkRunner:
                 cancelled_mid_arch = False
 
                 for trial in range(1, num_trials + 1):
-                    trial_tasks = list(tasks)
+                    trial_tasks = list(task_snapshots)
                     if rng is not None and len(trial_tasks) > 1 and trial > 1:
                         rng.shuffle(trial_tasks)
 
-                    for task in trial_tasks:
-                        # Cache primitives before task work so rollback never causes MissingGreenlet
-                        task_id = task.id
-                        task_key = task.task_key
-                        task_category = task.category
-                        conv_seq = list(task.conversation_sequence)
-                        eval_query = dict(task.evaluation_query)
-                        expected_answer = dict(task.expected_answer)
+                    for task_snap in trial_tasks:
+                        task_id = task_snap.id
+                        task_key = task_snap.task_key
+                        task_category = task_snap.category
+                        conv_seq = task_snap.conversation_sequence
+                        eval_query = task_snap.evaluation_query
+                        expected_answer = task_snap.expected_answer
 
                         # Promptly obey cancellation during long runs
-                        await self.db.refresh(run)
-                        if run.status == "cancelled":
+                        if await self._is_run_cancelled(run_id):
                             cancelled_mid_arch = True
                             break
 
@@ -150,11 +203,16 @@ class BenchmarkRunner:
                                     subject=turn.get("subject"),
                                     predicate=turn.get("predicate"),
                                     object_value=turn.get("object_value"),
-                                    metadata={"role": turn.get("role", "user"), "seq": turn.get("sequence_number")},
+                                    metadata={
+                                        "role": turn.get("role", "user"),
+                                        "seq": turn.get("sequence_number"),
+                                    },
                                 )
                                 store_res = await memory_engine.store(item)
                                 if store_res.status == "error":
-                                    raise RuntimeError(store_res.error_message or "Memory store error")
+                                    raise RuntimeError(
+                                        store_res.error_message or "Memory store error"
+                                    )
                                 all_stored_ids.extend(store_res.affected_memory_ids)
                                 if turn.get("is_evidence") and store_res.affected_memory_ids:
                                     required_memory_ids.extend(store_res.affected_memory_ids)
@@ -179,7 +237,9 @@ class BenchmarkRunner:
 
                             ret_res = await memory_engine.retrieve(query=question, top_k=top_k)
                             if ret_res.status == "error":
-                                raise RuntimeError(ret_res.error_message or "Memory retrieval error")
+                                raise RuntimeError(
+                                    ret_res.error_message or "Memory retrieval error"
+                                )
                             retrieved_contents = [m.content for m in ret_res.retrieved_memories]
 
                             # Step C: LLM Answer Generation
@@ -252,7 +312,7 @@ class BenchmarkRunner:
                                     "task_key": task_key,
                                     "category": task_category,
                                     "operation": operation,
-                                    "random_seed": run.random_seed,
+                                    "random_seed": random_seed,
                                     "is_correct": is_correct,
                                     "failure_label": failure_label,
                                     "retrieved_ids": ret_res.retrieved_memory_ids,
@@ -272,15 +332,18 @@ class BenchmarkRunner:
 
                         except Exception as task_err:
                             # Fault isolation: record failed task without aborting entire run
-                            logger.exception("Task %s (%s) failed on architecture '%s': %s", task_key, task_id, arch_type, task_err)
+                            logger.exception(
+                                "Task %s (%s) failed on architecture '%s'",
+                                task_key,
+                                task_id,
+                                arch_type,
+                            )
                             try:
                                 await self.db.rollback()
-                            except Exception:
-                                pass
-
-                            # Re-sync ORM instances after rollback
-                            run = (await self.db.execute(select(ExperimentRun).where(ExperimentRun.id == run_id))).scalars().one()
-                            run_arch = (await self.db.execute(select(RunArchitecture).where(RunArchitecture.id == run_arch_id))).scalars().one()
+                            except (SQLAlchemyError, RuntimeError, OSError) as rb_err:
+                                logger.warning(
+                                    "Rollback after task failure encountered error: %s", rb_err
+                                )
 
                             total_latency = (time.perf_counter() - task_start) * 1000
                             failure_label = GroundTruthEvaluator.classify_failure(
@@ -337,9 +400,15 @@ class BenchmarkRunner:
                     if cancelled_mid_arch:
                         break
 
+                run_arch = (
+                    await self.db.execute(
+                        select(RunArchitecture).where(RunArchitecture.id == run_arch_id)
+                    )
+                ).scalars().one()
+
                 if cancelled_mid_arch:
                     run_arch.status = "cancelled"
-                    run_arch.completed_at = datetime.now(timezone.utc)
+                    run_arch.completed_at = datetime.now(UTC)
                     await self.db.commit()
                     break
 
@@ -371,26 +440,30 @@ class BenchmarkRunner:
                     )
 
                 run_arch.status = "completed"
-                run_arch.completed_at = datetime.now(timezone.utc)
+                run_arch.completed_at = datetime.now(UTC)
                 await self.db.commit()
 
             # Re-fetch fresh run state to prevent race overwriting a cancel triggered during final architecture
-            await self.db.refresh(run)
-            if run.status != "cancelled":
-                run.status = "completed"
-                run.completed_at = datetime.now(timezone.utc)
+            final_run = (
+                await self.db.execute(select(ExperimentRun).where(ExperimentRun.id == run_id))
+            ).scalars().first()
+            if final_run and final_run.status != "cancelled":
+                final_run.status = "completed"
+                final_run.completed_at = datetime.now(UTC)
                 await self.db.commit()
 
         except Exception as e:
-            logger.exception("Benchmark run %s failed: %s", run_id, e)
+            logger.exception("Benchmark run %s failed", run_id)
             try:
                 await self.db.rollback()
-                err_res = await self.db.execute(select(ExperimentRun).where(ExperimentRun.id == run_id))
+                err_res = await self.db.execute(
+                    select(ExperimentRun).where(ExperimentRun.id == run_id)
+                )
                 failed_run = err_res.scalars().first()
                 if failed_run:
                     failed_run.status = "failed"
                     failed_run.error_message = str(e)
-                    failed_run.completed_at = datetime.now(timezone.utc)
+                    failed_run.completed_at = datetime.now(UTC)
                     await self.db.commit()
-            except Exception as commit_err:
-                logger.exception("Failed to persist failed status for run %s: %s", run_id, commit_err)
+            except Exception:
+                logger.exception("Failed to persist failed status for run %s", run_id)

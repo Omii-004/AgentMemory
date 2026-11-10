@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,8 +19,8 @@ def ensure_utc(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 async def purge_memory_record(
@@ -73,7 +74,7 @@ async def purge_memory_record(
 
     derived_ids = [mid for mid in all_ids_set if mid != memory_id]
     all_ids = [memory_id, *derived_ids]
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Hard-delete derived and structured representations
     await db.execute(delete(MemoryEmbedding).where(MemoryEmbedding.memory_id.in_(all_ids)))
@@ -129,7 +130,7 @@ async def purge_namespace_memories(db: AsyncSession, namespace_id: uuid.UUID) ->
     if not mem_ids:
         return True
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     await db.execute(delete(MemoryEmbedding).where(MemoryEmbedding.memory_id.in_(mem_ids)))
     await db.execute(delete(MemoryFact).where(MemoryFact.memory_id.in_(mem_ids)))
     await db.execute(delete(MemoryVersion).where(MemoryVersion.memory_id.in_(mem_ids)))

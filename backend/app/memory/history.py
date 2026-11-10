@@ -1,5 +1,6 @@
 import uuid
 from decimal import Decimal
+
 from sqlalchemy import desc, func, select
 
 from app.database.models.memory import Memory, MemoryEvent, MemoryVersion

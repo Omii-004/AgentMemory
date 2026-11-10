@@ -1,7 +1,8 @@
 import uuid
-from typing import Any, Dict, List
+from typing import Any
+
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_project_for_user
@@ -55,7 +56,7 @@ async def create_dataset(
     return APIResponse(message="Dataset created successfully", data=DatasetResponse.model_validate(ds))
 
 
-@router.get("/projects/{project_id}/datasets", response_model=APIResponse[List[DatasetResponse]])
+@router.get("/projects/{project_id}/datasets", response_model=APIResponse[list[DatasetResponse]])
 async def list_datasets(project: Project = Depends(get_project_for_user), db: AsyncSession = Depends(get_db)):
     res = await db.execute(select(BenchmarkDataset).where(BenchmarkDataset.project_id == project.id))
     return APIResponse(message="Datasets retrieved", data=[DatasetResponse.model_validate(d) for d in res.scalars().all()])
@@ -94,7 +95,7 @@ async def add_task(
     return APIResponse(message="Benchmark task added", data=TaskResponse.model_validate(task))
 
 
-@router.post("/datasets/{dataset_id}/tasks/import", response_model=APIResponse[Dict[str, int]], status_code=status.HTTP_201_CREATED)
+@router.post("/datasets/{dataset_id}/tasks/import", response_model=APIResponse[dict[str, int]], status_code=status.HTTP_201_CREATED)
 async def bulk_import_tasks(
     dataset_id: uuid.UUID,
     payload: BulkTaskImportRequest,
@@ -120,7 +121,7 @@ async def bulk_import_tasks(
     return APIResponse(message="Tasks imported successfully", data={"imported_count": len(payload.tasks), "total_tasks": ds.task_count})
 
 
-@router.post("/datasets/{dataset_id}/generate-synthetic", response_model=APIResponse[Dict[str, Any]], status_code=status.HTTP_201_CREATED)
+@router.post("/datasets/{dataset_id}/generate-synthetic", response_model=APIResponse[dict[str, Any]], status_code=status.HTTP_201_CREATED)
 async def generate_synthetic_tasks(
     dataset_id: uuid.UUID,
     payload: SyntheticGenerateRequest,
@@ -153,7 +154,7 @@ async def generate_synthetic_tasks(
     )
 
 
-@router.get("/datasets/{dataset_id}/tasks", response_model=APIResponse[List[TaskResponse]])
+@router.get("/datasets/{dataset_id}/tasks", response_model=APIResponse[list[TaskResponse]])
 async def list_tasks(
     dataset_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -162,14 +163,14 @@ async def list_tasks(
     return APIResponse(message="Tasks retrieved", data=[TaskResponse.model_validate(t) for t in res.scalars().all()])
 
 
-@router.post("/datasets/{dataset_id}/validate", response_model=APIResponse[Dict[str, Any]])
+@router.post("/datasets/{dataset_id}/validate", response_model=APIResponse[dict[str, Any]])
 async def validate_dataset(
     dataset_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     ds = await _get_owned_dataset(dataset_id, db, current_user)
     res = await db.execute(select(BenchmarkTask).where(BenchmarkTask.dataset_id == ds.id))
     tasks = res.scalars().all()
-    categories: Dict[str, int] = {}
+    categories: dict[str, int] = {}
     for t in tasks:
         categories[t.category] = categories.get(t.category, 0) + 1
     return APIResponse(

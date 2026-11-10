@@ -1,5 +1,5 @@
 import random
-from typing import List
+
 from app.benchmark.schemas import (
     BenchmarkTaskSchema,
     ConversationMessageSchema,
@@ -37,7 +37,7 @@ class SyntheticBenchmarkGenerator:
         self.rng = random.Random(seed)
         self.distractor_count = distractor_count
 
-    def _get_distractors(self, count: int, start_seq: int) -> List[ConversationMessageSchema]:
+    def _get_distractors(self, count: int, start_seq: int) -> list[ConversationMessageSchema]:
         turns = []
         for i in range(count):
             msg = self.rng.choice(DISTRACTOR_MESSAGES)
@@ -51,7 +51,7 @@ class SyntheticBenchmarkGenerator:
             )
         return turns
 
-    def generate_fact_retrieval(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_fact_retrieval(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         samples = [
             ("Python", "programming language", "User", "prefers", "Python"),
             ("Rust", "systems language", "User", "uses", "Rust"),
@@ -62,7 +62,7 @@ class SyntheticBenchmarkGenerator:
         ]
         tasks = []
         for i in range(count):
-            val, attr, sub, pred, obj = samples[i % len(samples)]
+            val, attr, sub, _pred, obj = samples[i % len(samples)]
             turns = [
                 ConversationMessageSchema(
                     sequence_number=1,
@@ -94,7 +94,7 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_temporal_reasoning(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_temporal_reasoning(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         scenarios = [
             ("January", "Flask", "June", "FastAPI", "backend framework"),
             ("2024", "MySQL", "2026", "PostgreSQL", "database"),
@@ -146,7 +146,7 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_contradiction_handling(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_contradiction_handling(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         pairs = [
             ("PostgreSQL", "MongoDB", "database"),
             ("AWS", "GCP", "cloud provider"),
@@ -197,7 +197,7 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_multi_hop(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_multi_hop(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         stacks = [
             ("React", "FastAPI", "PostgreSQL"),
             ("Vue", "Django", "MySQL"),
@@ -261,7 +261,7 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_memory_updating(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_memory_updating(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         updates = [
             ("VS Code", "Neovim", "editor"),
             ("Docker", "Podman", "container engine"),
@@ -310,7 +310,7 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_memory_deletion(self, count: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_memory_deletion(self, count: int = 5) -> list[BenchmarkTaskSchema]:
         secrets = [
             ("Project Phoenix", "secret codename"),
             ("Blueberry42", "temporary recovery passphrase"),
@@ -351,9 +351,9 @@ class SyntheticBenchmarkGenerator:
             )
         return tasks
 
-    def generate_suite(self, per_category: int = 5) -> List[BenchmarkTaskSchema]:
+    def generate_suite(self, per_category: int = 5) -> list[BenchmarkTaskSchema]:
         """Generates a balanced dataset across all 6 categories."""
-        all_tasks: List[BenchmarkTaskSchema] = []
+        all_tasks: list[BenchmarkTaskSchema] = []
         all_tasks.extend(self.generate_fact_retrieval(per_category))
         all_tasks.extend(self.generate_temporal_reasoning(per_category))
         all_tasks.extend(self.generate_contradiction_handling(per_category))

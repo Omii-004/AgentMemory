@@ -1,5 +1,6 @@
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ArchitectureUnsupportedException
@@ -14,7 +15,7 @@ def get_memory_architecture(
     architecture_type: str,
     db: AsyncSession,
     namespace_id: uuid.UUID,
-    config: Optional[Dict[str, Any]] = None
+    config: dict[str, Any] | None = None
 ) -> BaseMemory:
     """
     Factory function to instantiate the requested memory architecture.

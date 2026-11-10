@@ -1,6 +1,6 @@
 import re
 import string
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 class GroundTruthEvaluator:
@@ -21,17 +21,17 @@ class GroundTruthEvaluator:
     def evaluate_answer(
         cls,
         generated_text: str,
-        expected_outcome: Dict[str, Any],
+        expected_outcome: dict[str, Any],
         category: str,
-        retrieved_contents: Optional[List[str]] = None
-    ) -> Tuple[bool, Dict[str, Any]]:
+        retrieved_contents: list[str] | None = None
+    ) -> tuple[bool, dict[str, Any]]:
         """
         Determines task success based on category-specific evaluation policy.
         Returns: (is_correct: bool, evaluation_details: dict)
         """
         method = expected_outcome.get("evaluation_method", "normalized")
         expected_answer = str(expected_outcome.get("answer", ""))
-        accepted_answers: List[str] = [str(a) for a in expected_outcome.get("accepted_answers", [expected_answer])]
+        accepted_answers: list[str] = [str(a) for a in expected_outcome.get("accepted_answers", [expected_answer])]
 
         # Special policy for Category F: Memory Deletion
         if category == "memory_deletion" or method == "state_based_deletion":
@@ -77,10 +77,10 @@ class GroundTruthEvaluator:
         cls,
         is_correct: bool,
         category: str,
-        retrieved_memory_ids: List[str],
-        required_memory_ids: List[str],
+        retrieved_memory_ids: list[str],
+        required_memory_ids: list[str],
         error_occurred: bool = False
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Assigns a diagnostic failure classification label (Benchmark Spec Section 12).
         """

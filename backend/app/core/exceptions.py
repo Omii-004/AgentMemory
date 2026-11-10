@@ -1,4 +1,5 @@
-from typing import Any, Dict, Optional
+from typing import Any
+
 from fastapi import HTTPException, status
 
 
@@ -9,7 +10,7 @@ class AgentMemoryException(HTTPException):
         status_code: int,
         error_code: str,
         message: str,
-        details: Optional[Dict[str, Any]] = None
+        details: dict[str, Any] | None = None
     ):
         super().__init__(
             status_code=status_code,
@@ -22,27 +23,27 @@ class AgentMemoryException(HTTPException):
 
 
 class UnauthorizedException(AgentMemoryException):
-    def __init__(self, message: str = "Invalid credentials or token expired.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Invalid credentials or token expired.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_401_UNAUTHORIZED, "AM_ERR_UNAUTHORIZED", message, details)
 
 
 class ForbiddenException(AgentMemoryException):
-    def __init__(self, message: str = "You do not have access to this resource.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "You do not have access to this resource.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_403_FORBIDDEN, "AM_ERR_FORBIDDEN", message, details)
 
 
 class NotFoundException(AgentMemoryException):
-    def __init__(self, message: str = "Requested resource not found.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Requested resource not found.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_404_NOT_FOUND, "AM_ERR_NOT_FOUND", message, details)
 
 
 class ValidationException(AgentMemoryException):
-    def __init__(self, message: str = "Input validation failed.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Input validation failed.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_422_UNPROCESSABLE_ENTITY, "AM_ERR_VALIDATION_FAILED", message, details)
 
 
 class ConflictException(AgentMemoryException):
-    def __init__(self, message: str = "A resource conflict occurred.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "A resource conflict occurred.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_409_CONFLICT, "AM_ERR_CONFLICT", message, details)
 
 
@@ -62,5 +63,5 @@ class ExperimentBusyException(AgentMemoryException):
 
 
 class MemoryOperationException(AgentMemoryException):
-    def __init__(self, message: str = "Failed to perform memory operation.", details: Optional[Dict[str, Any]] = None):
+    def __init__(self, message: str = "Failed to perform memory operation.", details: dict[str, Any] | None = None):
         super().__init__(status.HTTP_500_INTERNAL_SERVER_ERROR, "AM_ERR_MEMORY_OPERATION_FAILED", message, details)

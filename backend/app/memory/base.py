@@ -2,6 +2,8 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from typing import Any
+
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -25,37 +27,31 @@ class BaseMemory(ABC):
     @abstractmethod
     def architecture_type(self) -> str:
         """Returns the architecture identifier (history, vector, structured, hybrid)."""
-        pass
 
     @abstractmethod
     async def _store_internal(self, item: MemoryItem) -> list[str]:
         """Architecture-specific write implementation."""
-        pass
 
     @abstractmethod
     async def _retrieve_internal(self, query: str, top_k: int = 5) -> list[RetrievedMemory]:
         """Architecture-specific retrieval implementation."""
-        pass
 
     @abstractmethod
     async def _update_internal(self, memory_id: str, new_item: MemoryItem) -> bool:
         """Architecture-specific update implementation."""
-        pass
 
     @abstractmethod
     async def _delete_internal(self, memory_id: str) -> bool:
         """Architecture-specific deletion implementation."""
-        pass
 
     @abstractmethod
     async def _clear_internal(self) -> bool:
         """Removes all memories within this namespace."""
-        pass
 
     async def _safe_rollback(self) -> None:
         try:
             await self.db.rollback()
-        except Exception as rollback_err:
+        except (SQLAlchemyError, RuntimeError, OSError) as rollback_err:
             logger.error("Failed to rollback session after memory operation error: %s", rollback_err)
 
     # Public Traceable API Wrappers
@@ -74,7 +70,7 @@ class BaseMemory(ABC):
             )
         except Exception as e:
             await self._safe_rollback()
-            logger.exception("[%s] store failed in namespace %s: %s", self.architecture_type, self.namespace_id, e)
+            logger.exception("[%s] store failed in namespace %s", self.architecture_type, self.namespace_id)
             latency = (time.perf_counter() - start_time) * 1000
             return MemoryOperationResult(
                 operation="store",
@@ -100,7 +96,7 @@ class BaseMemory(ABC):
             )
         except Exception as e:
             await self._safe_rollback()
-            logger.exception("[%s] retrieve failed in namespace %s: %s", self.architecture_type, self.namespace_id, e)
+            logger.exception("[%s] retrieve failed in namespace %s", self.architecture_type, self.namespace_id)
             latency = (time.perf_counter() - start_time) * 1000
             return MemoryOperationResult(
                 operation="retrieve",
@@ -124,7 +120,7 @@ class BaseMemory(ABC):
             )
         except Exception as e:
             await self._safe_rollback()
-            logger.exception("[%s] update failed for memory %s: %s", self.architecture_type, memory_id, e)
+            logger.exception("[%s] update failed for memory %s", self.architecture_type, memory_id)
             latency = (time.perf_counter() - start_time) * 1000
             return MemoryOperationResult(
                 operation="update",
@@ -148,7 +144,7 @@ class BaseMemory(ABC):
             )
         except Exception as e:
             await self._safe_rollback()
-            logger.exception("[%s] delete failed for memory %s: %s", self.architecture_type, memory_id, e)
+            logger.exception("[%s] delete failed for memory %s", self.architecture_type, memory_id)
             latency = (time.perf_counter() - start_time) * 1000
             return MemoryOperationResult(
                 operation="delete",
@@ -171,7 +167,7 @@ class BaseMemory(ABC):
             )
         except Exception as e:
             await self._safe_rollback()
-            logger.exception("[%s] clear failed in namespace %s: %s", self.architecture_type, self.namespace_id, e)
+            logger.exception("[%s] clear failed in namespace %s", self.architecture_type, self.namespace_id)
             latency = (time.perf_counter() - start_time) * 1000
             return MemoryOperationResult(
                 operation="clear",

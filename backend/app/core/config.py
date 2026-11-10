@@ -1,4 +1,5 @@
 from pathlib import Path
+
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str | None = None
     DATABASE_URL_SYNC: str | None = None
 
-    @computed_field
+    @computed_field # type: ignore[prop-decorator]
     @property
     def async_database_url(self) -> str:
         if self.DATABASE_URL:
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
-    @computed_field
+    @computed_field # type: ignore[prop-decorator]
     @property
     def sync_database_url(self) -> str:
         if self.DATABASE_URL_SYNC:

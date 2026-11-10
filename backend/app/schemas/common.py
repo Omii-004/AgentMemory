@@ -1,7 +1,4 @@
-from typing import Generic, List, Optional, TypeVar
 from pydantic import BaseModel
-
-T = TypeVar("T")
 
 
 class PaginationMeta(BaseModel):
@@ -11,15 +8,17 @@ class PaginationMeta(BaseModel):
     total_pages: int
 
 
-class APIResponse(BaseModel, Generic[T]):
+class APIResponse[T](BaseModel):
     """Standard success response envelope specified in API-SPEC Section 2.4."""
+
     success: bool = True
     message: str = "Operation completed successfully"
-    data: Optional[T] = None
+    data: T | None = None
 
 
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Standard paginated response envelope specified in API-SPEC Section 2.5."""
+
     success: bool = True
-    data: List[T]
+    data: list[T]
     pagination: PaginationMeta

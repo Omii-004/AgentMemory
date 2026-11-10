@@ -1,6 +1,16 @@
+import uuid
+from datetime import UTC, datetime
+
+import pytest
+
+from app.agent.context_builder import ContextBuilder
 from app.evaluation.evaluator import GroundTruthEvaluator
 from app.evaluation.metrics import MetricsCalculator
 from app.evaluation.stats import StatisticalAnalyzer
+from app.llm.factory import get_llm_adapter
+from app.llm.mock import MockLLMAdapter
+from app.llm.openai_compatible import OpenAICompatibleLLMAdapter
+from app.memory.schemas import RetrievedMemory
 
 
 def test_evaluator_normalized_match():
@@ -39,7 +49,6 @@ def test_evaluator_multi_hop_contains_all():
 
 
 def test_evaluator_deletion_verification():
-    # Pass: forbidden secret not present in retrieved memories
     ok, _ = GroundTruthEvaluator.evaluate_answer(
         generated_text="",
         expected_outcome={"forbidden_terms": ["Project Phoenix"], "evaluation_method": "state_based_deletion"},
@@ -48,7 +57,6 @@ def test_evaluator_deletion_verification():
     )
     assert ok is True
 
-    # Fail: forbidden secret leaked back
     leak, details = GroundTruthEvaluator.evaluate_answer(
         generated_text="",
         expected_outcome={"forbidden_terms": ["Project Phoenix"], "evaluation_method": "state_based_deletion"},
@@ -57,6 +65,34 @@ def test_evaluator_deletion_verification():
     )
     assert leak is False
     assert "Project Phoenix" in details["leaked_terms"]
+
+
+def test_failure_classification_labels():
+    assert GroundTruthEvaluator.classify_failure(
+        is_correct=False,
+        category="fact_retrieval",
+        retrieved_memory_ids=[],
+        required_memory_ids=["m1"],
+        error_occurred=True,
+    ) == "Execution Failure"
+    assert GroundTruthEvaluator.classify_failure(
+        is_correct=False,
+        category="fact_retrieval",
+        retrieved_memory_ids=["m2"],
+        required_memory_ids=["m1"],
+    ) == "Retrieval Failure"
+    assert GroundTruthEvaluator.classify_failure(
+        is_correct=False,
+        category="memory_deletion",
+        retrieved_memory_ids=[],
+        required_memory_ids=[],
+    ) == "Deletion Failure"
+    assert GroundTruthEvaluator.classify_failure(
+        is_correct=False,
+        category="memory_updating",
+        retrieved_memory_ids=[],
+        required_memory_ids=[],
+    ) == "Update Failure"
 
 
 def test_retrieval_and_aggregate_metrics():
@@ -106,3 +142,33 @@ def test_statistical_significance_and_confidence_intervals():
     assert pair["statistically_significant_05"] is True
     assert pair["p_value_ttest"] < 0.05
     assert pair["effect_magnitude"] == "large"
+
+
+@pytest.mark.asyncio
+async def test_mock_llm_context_builder_and_factory_validation():
+    now = datetime.now(UTC)
+    memories = [
+        RetrievedMemory(id=uuid.uuid4(), content="What is the weather in Tokyo?", memory_type="semantic", created_at=now),
+        RetrievedMemory(id=uuid.uuid4(), content="My preferred systems language is Rust.", memory_type="semantic", created_at=now),
+    ]
+    prompt = ContextBuilder.build_prompt("What is my preferred systems language?", memories)
+    adapter = MockLLMAdapter()
+    res = await adapter.generate(prompt)
+    assert "Rust" in res.text
+
+    multi_memories = [
+        RetrievedMemory(id=uuid.uuid4(), content="The project frontend uses React.", memory_type="semantic", created_at=now),
+        RetrievedMemory(id=uuid.uuid4(), content="The project backend uses FastAPI.", memory_type="semantic", created_at=now),
+    ]
+    multi_prompt = ContextBuilder.build_prompt("List the frontend and backend technologies.", multi_memories)
+    multi_res = await adapter.generate(multi_prompt)
+    assert "React" in multi_res.text and "FastAPI" in multi_res.text
+
+    with pytest.raises(ValueError, match="Unsupported LLM provider"):
+        get_llm_adapter("nonexistent_provider")
+
+    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+        OpenAICompatibleLLMAdapter(api_key="", base_url="https://api.openai.com/v1")
+
+    local_adapter = OpenAICompatibleLLMAdapter(api_key="", base_url="http://localhost:8000/v1")
+    assert local_adapter.base_url == "http://localhost:8000/v1"

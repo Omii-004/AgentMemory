@@ -1,6 +1,6 @@
 import uuid
-from typing import AsyncGenerator
-from fastapi import Depends, Header
+
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

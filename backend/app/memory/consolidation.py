@@ -1,7 +1,9 @@
 import uuid
 from decimal import Decimal
+
 from pydantic import BaseModel
 from sqlalchemy import delete, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -148,10 +150,10 @@ class MemoryConsolidator:
                 summary_content=summary_text,
                 source_memory_ids=source_ids,
             )
-        except Exception as exc:
-            logger.exception("Memory consolidation failed for namespace %s: %s", self.namespace_id, exc)
+        except Exception:
+            logger.exception("Memory consolidation failed for namespace %s", self.namespace_id)
             try:
                 await self.db.rollback()
-            except Exception:
-                pass
+            except (SQLAlchemyError, RuntimeError, OSError) as rb_err:
+                logger.warning("Rollback after consolidation error failed: %s", rb_err)
             return ConsolidationResult(status="error")

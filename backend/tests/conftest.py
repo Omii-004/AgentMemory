@@ -1,6 +1,6 @@
 import uuid
-from typing import AsyncGenerator
-import pytest
+from collections.abc import AsyncGenerator
+
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete
