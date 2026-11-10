@@ -23,6 +23,7 @@ AgentMemory implements four interchangeable memory architectures under a unified
 ## Core Capabilities Built
 
 - **20 Core Relational Tables:** Fully normalized PostgreSQL 16 schema managed via SQLAlchemy 2.0 (asyncio) and Alembic migrations.
+- **Memory Lifecycle & Consolidation:** Supports memory formation, versioned updates, contradiction superseding, physical vector purge on deletion, and semantic consolidation (`MemoryConsolidator`) with `derives_from` provenance links.
 - **Local CPU Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` with asynchronous thread-pooling to avoid blocking FastAPI's event loop.
 - **Provider-Independent LLM Layer:** Unified adapter interface supporting `MockLLM` (deterministic offline testing), `OllamaLLM` (local models), and `OpenAICompatibleLLM` (cloud providers).
 - **6-Category Synthetic Benchmark Suite:** Automated benchmark task generation and execution across:
@@ -32,8 +33,8 @@ AgentMemory implements four interchangeable memory architectures under a unified
   4. **Multi-Hop Retrieval**
   5. **Memory Updating**
   6. **Memory Deletion** (verifying zero retrieval or vector leakage)
-- **Quantitative Evaluation & Observability Engine:** Calculates **Task Success Rate (TSR)**, **Precision@K**, **Recall@K**, **MRR**, latencies, token usage, **Memory Utility**, failure classifications, and step-by-step execution traces.
-- **Full RESTful API (`/api/v1`):** 56 HTTP endpoints covering Auth, Projects, Sessions, Memory Lab & Inspector, Datasets, Async Background Experiment Runs, Side-by-Side Architecture Comparisons, Traces, and JSON/CSV Report Exports.
+- **Quantitative Evaluation, Statistics & Observability:** Calculates **Task Success Rate (TSR)**, **Precision@K**, **Recall@K**, **MRR**, latencies, token usage, **Memory Utility**, failure classifications, step-by-step execution traces, and paired statistical comparisons (95% CI, paired *t*-test, Wilcoxon signed-rank test, Cohen's *d*).
+- **Full RESTful API (`/api/v1`):** Covers Auth, Projects, Sessions, Memory Lab & Consolidation, Datasets, Async Background Experiment Runs, Side-by-Side Architecture Comparisons, Statistical Analysis, Traces, and JSON/CSV Report Exports.
 
 ---
 
@@ -41,8 +42,9 @@ AgentMemory implements four interchangeable memory architectures under a unified
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0 (asyncio), Alembic, Pydantic v2
 - **Database:** PostgreSQL 16 + `pgvector`
-- **Embeddings:** `sentence-transformers` (`all-MiniLM-L6-v2`)
+- **Embeddings & Stats:** `sentence-transformers` (`all-MiniLM-L6-v2`), `numpy`, `scipy`, `scikit-learn`, `pandas`
 - **Security:** JWT (`python-jose`), native `bcrypt` password hashing, multi-tenant project isolation
+- **Testing:** `pytest`, `pytest-asyncio`, `httpx` (`ASGITransport`)
 - **Package Manager:** `uv`
 - **Containers:** Docker Compose
 
@@ -77,6 +79,12 @@ uvicorn app.main:app --reload
 * **Interactive Swagger Docs:** http://127.0.0.1:8000/docs
 * **Health Check:** http://127.0.0.1:8000/health
 
+### 5. Run the Automated Test Suite
+```bash
+cd backend
+pytest -v
+```
+
 ---
 
 ## Project Structure
@@ -87,19 +95,20 @@ AgentMemory/
 ├── .env.example                    # Environment template
 ├── README.md                       # Documentation
 ├── backend/
-│   ├── pyproject.toml              # Python 3.12 dependencies and tooling
+│   ├── pyproject.toml              # Python 3.12 dependencies, ruff, pytest config
 │   ├── alembic.ini                 # Database migration config
 │   ├── migrations/                 # Alembic async migration versions
+│   ├── tests/                      # Unit, integration, consolidation, stats & E2E API tests
 │   └── app/
 │       ├── main.py                 # FastAPI entrypoint, CORS, exception handlers
 │       ├── core/                   # Config, native bcrypt/JWT security, logging, exceptions
 │       ├── database/               # Connection pool, 20 SQLAlchemy models
 │       ├── embeddings/             # SentenceTransformers CPU embedding service
-│       ├── memory/                 # BaseMemory, History, Vector, Structured, Hybrid, Factory
+│       ├── memory/                 # BaseMemory, History, Vector, Structured, Hybrid, Consolidation
 │       ├── llm/                    # BaseLLMAdapter, Mock, Ollama, OpenAI adapters, Factory
 │       ├── agent/                  # Context builder & prompt synthesis
 │       ├── benchmark/              # Task schemas, 6-category generator, async BenchmarkRunner
-│       ├── evaluation/             # GroundTruthEvaluator, failure classifier, MetricsCalculator
+│       ├── evaluation/             # GroundTruthEvaluator, MetricsCalculator, StatisticalAnalyzer
 │       ├── observability/          # Execution TraceCollector
 │       ├── schemas/                # Pydantic v2 API request/response contracts
 │       └── api/                    # Tenant-isolated dependencies & /api/v1 routers

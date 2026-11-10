@@ -39,6 +39,9 @@ class BenchmarkRunner:
         if not run:
             logger.error(f"ExperimentRun {run_id} not found.")
             return
+        if run.status in ("running", "completed"):
+            logger.warning(f"ExperimentRun {run_id} is already '{run.status}'. Skipping duplicate execution.")
+            return
 
         exp_res = await self.db.execute(select(Experiment).where(Experiment.id == run.experiment_id))
         experiment = exp_res.scalars().first()

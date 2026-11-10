@@ -58,5 +58,6 @@ Security and Privacy Specification*
 Software Test Plan*
 
 # Experiment Artifacts (future local runs)
+experiment-artifacts/
 experiment-artifacts/traces/
 experiment-artifacts/reports/*.pdf
