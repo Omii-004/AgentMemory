@@ -20,6 +20,7 @@ class NamespaceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     project_id: uuid.UUID
+    run_id: uuid.UUID | None = None
     architecture_type: str
     name: str
     config: dict[str, Any]
@@ -63,13 +64,30 @@ class MemoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: uuid.UUID
     namespace_id: uuid.UUID
+    source_message_id: uuid.UUID | None = None
+    parent_memory_id: uuid.UUID | None = None
     memory_type: str
     content: str
     importance: float | None
     confidence: float | None
     status: str
+    deleted_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class MemoryFactResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: uuid.UUID
+    memory_id: uuid.UUID
+    subject: str
+    predicate: str
+    object_value: str
+    object_type: str
+    valid_from: datetime | None
+    valid_to: datetime | None
+    confidence: float | None
+    created_at: datetime
 
 
 class MemoryVersionResponse(BaseModel):

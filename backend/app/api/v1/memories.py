@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, get_project_for_user
 from app.core.exceptions import ConflictException, MemoryOperationException, NotFoundException
 from app.database.connection import get_db
-from app.database.models.memory import Memory, MemoryEvent, MemoryNamespace, MemoryVersion
+from app.database.models.memory import (
+    Memory,
+    MemoryEvent,
+    MemoryFact,
+    MemoryNamespace,
+    MemoryVersion,
+)
 from app.database.models.user import Project, User
 from app.memory.consolidation import ConsolidationResult, MemoryConsolidator
 from app.memory.factory import get_memory_architecture
@@ -17,6 +23,7 @@ from app.memory.schemas import MemoryItem, MemoryOperationResult
 from app.schemas.common import APIResponse
 from app.schemas.memory import (
     MemoryEventResponse,
+    MemoryFactResponse,
     MemoryResponse,
     MemoryRetrieveRequest,
     MemoryStoreRequest,
@@ -70,9 +77,20 @@ async def create_namespace(
 
 
 @router.get("/projects/{project_id}/memory-namespaces", response_model=APIResponse[list[NamespaceResponse]])
-async def list_namespaces(project: Project = Depends(get_project_for_user), db: AsyncSession = Depends(get_db)):
-    res = await db.execute(select(MemoryNamespace).where(MemoryNamespace.project_id == project.id))
-    return APIResponse(message="Namespaces retrieved", data=[NamespaceResponse.model_validate(n) for n in res.scalars().all()])
+async def list_namespaces(
+    include_run_namespaces: bool = Query(default=True),
+    project: Project = Depends(get_project_for_user),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(MemoryNamespace).where(MemoryNamespace.project_id == project.id)
+    if not include_run_namespaces:
+        stmt = stmt.where(MemoryNamespace.run_id.is_(None))
+    stmt = stmt.order_by(MemoryNamespace.created_at.desc())
+    res = await db.execute(stmt)
+    return APIResponse(
+        message="Namespaces retrieved",
+        data=[NamespaceResponse.model_validate(n) for n in res.scalars().all()],
+    )
 
 
 async def _get_owned_namespace(
@@ -202,13 +220,15 @@ async def list_memories(
     current_user: User = Depends(get_current_user),
 ):
     ns = await _get_owned_namespace(namespace_id, db, current_user, project_id=project.id)
-    stmt = (
-        select(Memory)
-        .where(Memory.namespace_id == ns.id, Memory.status == status_filter)
-        .order_by(Memory.created_at.desc())
-    )
+    stmt = select(Memory).where(Memory.namespace_id == ns.id)
+    if status_filter != "all":
+        stmt = stmt.where(Memory.status == status_filter)
+    stmt = stmt.order_by(Memory.created_at.desc())
     res = await db.execute(stmt)
-    return APIResponse(message="Memories listed", data=[MemoryResponse.model_validate(m) for m in res.scalars().all()])
+    return APIResponse(
+        message="Memories listed",
+        data=[MemoryResponse.model_validate(m) for m in res.scalars().all()],
+    )
 
 
 async def _get_owned_memory(memory_id: uuid.UUID, db: AsyncSession, current_user: User) -> tuple[Memory, MemoryNamespace]:
@@ -291,3 +311,21 @@ async def get_memory_events(
     mem, _ = await _get_owned_memory(memory_id, db, current_user)
     res = await db.execute(select(MemoryEvent).where(MemoryEvent.memory_id == mem.id).order_by(MemoryEvent.created_at.asc()))
     return APIResponse(message="Memory lifecycle events retrieved", data=[MemoryEventResponse.model_validate(e) for e in res.scalars().all()])
+
+
+@router.get("/memories/{memory_id}/facts", response_model=APIResponse[list[MemoryFactResponse]])
+async def get_memory_facts(
+    memory_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    mem, _ = await _get_owned_memory(memory_id, db, current_user)
+    res = await db.execute(
+        select(MemoryFact)
+        .where(MemoryFact.memory_id == mem.id)
+        .order_by(MemoryFact.created_at.asc())
+    )
+    return APIResponse(
+        message="Memory extracted facts retrieved",
+        data=[MemoryFactResponse.model_validate(f) for f in res.scalars().all()],
+    )

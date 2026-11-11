@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Pre-Frontend API Read & Inspection Endpoints:**
+  - Added `GET /api/v1/experiments/{experiment_id}/runs` to list experiment runs ordered newest-first (`run_number` descending).
+  - Added `GET /api/v1/projects/{project_id}/reports` and `GET /api/v1/runs/{run_id}/reports` to list persisted reports with strict tenant ownership filtering.
+  - Added `GET /api/v1/memories/{memory_id}/facts` (`MemoryFactResponse`) to inspect extracted Subject–Predicate–Object triples and temporal bounds (returning `[]` after deletion purge).
+- **Regression & Isolation Tests:** Expanded `backend/tests/test_api_and_security.py` to verify all new read endpoints, namespace `run_id` filtering, expected-answer failure snapshots, redacted deletion listing (`status_filter=all`), post-purge fact cleanup, and cross-user `404` anti-enumeration checks.
+
+### Changed
+- **Memory & Namespace Inspection Contracts:**
+  - Added `run_id` to `NamespaceResponse` and an optional `include_run_namespaces` query parameter (default `true`, ordered newest-first) on `GET /api/v1/projects/{project_id}/memory-namespaces`.
+  - Added `source_message_id`, `parent_memory_id`, and `deleted_at` to `MemoryResponse`, and added `status_filter=all` support on `GET /api/v1/projects/{project_id}/memories` while keeping `"active"` as the default.
+- **Task Result & Failure Analysis Payloads:**
+  - Exposed `expected_answer_snapshot` and `created_at` on `TaskResultResponse`.
+  - Enriched `GET /api/v1/runs/{run_id}/failures` with `task_result_id`, `task_key`, `category`, `expected_answer`, and `retrieved_memory_ids` for Expected-vs-Actual inspection and execution-trace linking.
+
 ### Planned
 - React + TypeScript + Vite frontend workspace aligned with [`Design Specification`](Design%20Specification) and [`API-SPEC`](API-SPEC%20(API%20Specification)).
 - Optional Phase-2 backend schema hardening (Alembic migration for DB unique/check constraints, pgvector HNSW index, token revocation store, and pagination/rate limiting).
