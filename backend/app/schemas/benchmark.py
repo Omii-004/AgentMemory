@@ -146,6 +146,7 @@ class TaskResultResponse(BaseModel):
     task_id: uuid.UUID
     trial_number: int
     generated_answer: dict[str, Any] | None
+    expected_answer_snapshot: dict[str, Any] | None = None
     task_status: str
     is_correct: bool | None
     retrieval_latency_ms: float | None
@@ -154,6 +155,7 @@ class TaskResultResponse(BaseModel):
     total_tokens: int | None
     retrieved_memory_ids: list[str] | None
     evaluation_details: dict[str, Any]
+    created_at: datetime | None = None
 
 
 class MetricResultResponse(BaseModel):

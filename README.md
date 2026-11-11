@@ -36,7 +36,7 @@ AgentMemory implements four interchangeable memory architectures under a unified
   5. **Memory Updating**
   6. **Memory Deletion** (verifying zero retrieval or vector leakage)
 - **Quantitative Evaluation, Statistics & Observability:** Computes **Task Success Rate (TSR)**, **Precision@K**, **Recall@K**, **MRR**, latencies, token usage, **Memory Utility**, failure classifications, step-by-step execution traces, and paired statistical comparisons (95% CI, paired *t*-test, Wilcoxon signed-rank test, Cohen's *d*).
-- **Hardened RESTful API (`/api/v1`):** Auth, Projects, Sessions, Memory Lab & Consolidation, Datasets, Async Background Experiment Runs, Side-by-Side Architecture Comparisons, Statistical Analysis, Traces, JSON/CSV Report Exports, strict cross-project tenant/namespace isolation, and standardized `AM_ERR_*` error envelopes.
+- **Hardened RESTful API (`/api/v1`):** Auth, Projects, Sessions, Memory Lab & Consolidation, Memory Facts/Versions/Events Inspection, Datasets, Async Background Experiment Runs & Run History, Side-by-Side Architecture Comparisons, Expected-vs-Actual Failure Analysis, Statistical Analysis, Traces, JSON/CSV Report Management & Exports, strict cross-project tenant/namespace isolation, and standardized `AM_ERR_*` error envelopes.
 
 ---
 
@@ -103,6 +103,8 @@ AgentMemory/
 ├── docker-compose.yml              # PostgreSQL 16 + pgvector container
 ├── .env.example                    # Environment variable template
 ├── README.md                       # Project documentation
+├── CHANGELOG.md                    # Release and hardening history
+├── SECURITY.md                     # Security policy, implemented controls, and roadmap
 ├── backend/
 │   ├── pyproject.toml              # Python 3.12 dependencies, ruff, mypy, pytest config
 │   ├── alembic.ini                 # Database migration config

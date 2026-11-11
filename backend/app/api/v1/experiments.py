@@ -18,7 +18,7 @@ from app.core.exceptions import (
     NotFoundException,
 )
 from app.database.connection import AsyncSessionLocal, get_db
-from app.database.models.benchmark import BenchmarkDataset
+from app.database.models.benchmark import BenchmarkDataset, BenchmarkTask
 from app.database.models.evaluation import ExecutionTrace, MetricResult, Report, TaskResult
 from app.database.models.experiment import Experiment, ExperimentRun, RunArchitecture
 from app.database.models.memory import MemoryNamespace
@@ -252,6 +252,24 @@ async def get_run_status(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), 
     return APIResponse(message="Run status retrieved", data=RunResponse.model_validate(run))
 
 
+@router.get("/experiments/{experiment_id}/runs", response_model=APIResponse[list[RunResponse]])
+async def list_experiment_runs(
+    experiment_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    exp = await _get_owned_experiment(experiment_id, db, current_user)
+    res = await db.execute(
+        select(ExperimentRun)
+        .where(ExperimentRun.experiment_id == exp.id)
+        .order_by(ExperimentRun.run_number.desc())
+    )
+    return APIResponse(
+        message="Experiment runs retrieved",
+        data=[RunResponse.model_validate(r) for r in res.scalars().all()],
+    )
+
+
 @router.post("/runs/{run_id}/cancel", response_model=APIResponse[RunResponse])
 async def cancel_run(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     run, _ = await _get_owned_run(run_id, db, current_user)
@@ -384,23 +402,39 @@ async def get_metrics_by_category(run_id: uuid.UUID, db: AsyncSession = Depends(
 
 
 @router.get("/runs/{run_id}/failures", response_model=APIResponse[list[dict[str, Any]]])
-async def get_failure_analysis(run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_failure_analysis(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     run, _ = await _get_owned_run(run_id, db, current_user)
     stmt = (
-        select(RunArchitecture.architecture_type, TaskResult)
+        select(
+            RunArchitecture.architecture_type,
+            TaskResult,
+            BenchmarkTask.task_key,
+            BenchmarkTask.category,
+        )
         .join(RunArchitecture, TaskResult.run_architecture_id == RunArchitecture.id)
+        .join(BenchmarkTask, TaskResult.task_id == BenchmarkTask.id)
         .where(TaskResult.run_id == run.id, TaskResult.is_correct.is_(False))
+        .order_by(TaskResult.created_at.asc())
     )
     res = await db.execute(stmt)
     failures = [
         {
+            "task_result_id": str(tr.id),
             "architecture": arch_type,
             "task_id": str(tr.task_id),
+            "task_key": task_key,
+            "category": category,
             "failure_classification": tr.evaluation_details.get("failure_classification", "Unknown"),
+            "expected_answer": tr.expected_answer_snapshot,
             "generated_answer": tr.generated_answer,
+            "retrieved_memory_ids": tr.retrieved_memory_ids or [],
             "evaluation_details": tr.evaluation_details,
         }
-        for arch_type, tr in res.all()
+        for arch_type, tr, task_key, category in res.all()
     ]
     return APIResponse(message="Failure analysis retrieved", data=failures)
 
@@ -496,6 +530,40 @@ async def generate_report(
     return APIResponse(message="Report generated successfully", data=ReportResponse.model_validate(report))
 
 
+@router.get("/projects/{project_id}/reports", response_model=APIResponse[list[ReportResponse]])
+async def list_project_reports(
+    project: Project = Depends(get_project_for_user),
+    db: AsyncSession = Depends(get_db),
+):
+    res = await db.execute(
+        select(Report)
+        .where(Report.project_id == project.id)
+        .order_by(Report.created_at.desc())
+    )
+    return APIResponse(
+        message="Project reports retrieved",
+        data=[ReportResponse.model_validate(r) for r in res.scalars().all()],
+    )
+
+
+@router.get("/runs/{run_id}/reports", response_model=APIResponse[list[ReportResponse]])
+async def list_run_reports(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run, _ = await _get_owned_run(run_id, db, current_user)
+    res = await db.execute(
+        select(Report)
+        .where(Report.run_id == run.id)
+        .order_by(Report.created_at.desc())
+    )
+    return APIResponse(
+        message="Run reports retrieved",
+        data=[ReportResponse.model_validate(r) for r in res.scalars().all()],
+    )
+
+    
 @router.get("/reports/{report_id}", response_model=APIResponse[ReportResponse])
 async def get_report(report_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     stmt = (

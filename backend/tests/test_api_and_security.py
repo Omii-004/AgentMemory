@@ -171,6 +171,25 @@ async def test_cross_project_namespace_isolation_and_memory_api_lifecycle(client
     )
     assert upd.status_code == 200
 
+    ns_list = await client.get(f"/api/v1/projects/{proj_b}/memory-namespaces", headers=headers)
+    assert ns_list.status_code == 200 and ns_list.json()["data"][0]["run_id"] is None
+
+    facts = await client.get(f"/api/v1/memories/{mem_id}/facts", headers=headers)
+    assert facts.status_code == 200
+    assert len(facts.json()["data"]) == 1
+    assert facts.json()["data"][0]["subject"] == "Project"
+    assert facts.json()["data"][0]["object_value"] == "CockroachDB"
+
+    # Cross-user 404 isolation on /memories/{id}/facts
+    other_token = await _register_and_login(client, f"mem_other_{uuid.uuid4()}@example.com")
+    other_me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {other_token}"})
+    cleanup_users.append(uuid.UUID(other_me.json()["data"]["id"]))
+    denied_facts = await client.get(
+        f"/api/v1/memories/{mem_id}/facts",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert denied_facts.status_code == 404
+
     vers = await client.get(f"/api/v1/memories/{mem_id}/versions", headers=headers)
     assert vers.status_code == 200 and vers.json()["data"][0]["version_number"] == 1
 
@@ -179,6 +198,18 @@ async def test_cross_project_namespace_isolation_and_memory_api_lifecycle(client
 
     del1 = await client.delete(f"/api/v1/memories/{mem_id}", headers=headers)
     assert del1.status_code == 200
+
+    all_mems = await client.get(
+        f"/api/v1/projects/{proj_b}/memories?namespace_id={ns_b}&status_filter=all",
+        headers=headers,
+    )
+    deleted_rec = next(m for m in all_mems.json()["data"] if m["id"] == mem_id)
+    assert deleted_rec["status"] == "deleted"
+    assert deleted_rec["content"] == "[REDACTED]"
+    assert deleted_rec["deleted_at"] is not None
+
+    facts_after_del = await client.get(f"/api/v1/memories/{mem_id}/facts", headers=headers)
+    assert facts_after_del.status_code == 200 and facts_after_del.json()["data"] == []
 
     del2 = await client.delete(f"/api/v1/memories/{mem_id}", headers=headers)
     assert del2.status_code == 409
@@ -352,6 +383,49 @@ async def test_end_to_end_benchmark_pipeline(client, db_session, cleanup_users):
     dl_csv = await client.get(f"/api/v1/reports/{rep_csv.json()['data']['id']}/download", headers=headers)
     assert dl_csv.status_code == 200
     assert "Architecture,Metric,Value" in dl_csv.text
+
+    exp_runs = await client.get(f"/api/v1/experiments/{exp_id}/runs", headers=headers)
+    assert exp_runs.status_code == 200
+    assert [r["id"] for r in exp_runs.json()["data"]] == [str(run_id)]
+
+    manual_ns = await client.get(
+        f"/api/v1/projects/{project_id}/memory-namespaces?include_run_namespaces=false",
+        headers=headers,
+    )
+    assert manual_ns.status_code == 200 and manual_ns.json()["data"] == []
+    run_ns = await client.get(
+        f"/api/v1/projects/{project_id}/memory-namespaces?include_run_namespaces=true",
+        headers=headers,
+    )
+    assert len(run_ns.json()["data"]) == 4
+    assert all(ns["run_id"] == str(run_id) for ns in run_ns.json()["data"])
+
+    results_resp = await client.get(f"/api/v1/runs/{run_id}/results", headers=headers)
+    assert results_resp.status_code == 200
+    assert results_resp.json()["data"][0]["expected_answer_snapshot"] is not None
+    assert results_resp.json()["data"][0]["created_at"] is not None
+
+    failures_resp = await client.get(f"/api/v1/runs/{run_id}/failures", headers=headers)
+    assert failures_resp.status_code == 200
+    first_fail = failures_resp.json()["data"][0]
+    assert {"task_result_id", "task_key", "category", "expected_answer", "retrieved_memory_ids"}.issubset(
+        first_fail.keys()
+    )
+
+    run_reports = await client.get(f"/api/v1/runs/{run_id}/reports", headers=headers)
+    proj_reports = await client.get(f"/api/v1/projects/{project_id}/reports", headers=headers)
+    assert run_reports.status_code == 200 and len(run_reports.json()["data"]) == 2
+    assert proj_reports.status_code == 200 and len(proj_reports.json()["data"]) == 2
+
+    # Cross-user 404 isolation on new list endpoints
+    intruder_token = await _register_and_login(client, f"intruder_{uuid.uuid4()}@example.com")
+    intruder_headers = {"Authorization": f"Bearer {intruder_token}"}
+    intruder_me = await client.get("/api/v1/auth/me", headers=intruder_headers)
+    cleanup_users.append(uuid.UUID(intruder_me.json()["data"]["id"]))
+
+    assert (await client.get(f"/api/v1/experiments/{exp_id}/runs", headers=intruder_headers)).status_code == 404
+    assert (await client.get(f"/api/v1/runs/{run_id}/reports", headers=intruder_headers)).status_code == 404
+    assert (await client.get(f"/api/v1/projects/{project_id}/reports", headers=intruder_headers)).status_code == 404
 
 
 @pytest.mark.asyncio
