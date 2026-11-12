@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `GET /api/v1/projects/{project_id}/reports` and `GET /api/v1/runs/{run_id}/reports` to list persisted reports with strict tenant ownership filtering.
   - Added `GET /api/v1/memories/{memory_id}/facts` (`MemoryFactResponse`) to inspect extracted Subject–Predicate–Object triples and temporal bounds (returning `[]` after deletion purge).
 - **Regression & Isolation Tests:** Expanded `backend/tests/test_api_and_security.py` to verify all new read endpoints, namespace `run_id` filtering, expected-answer failure snapshots, redacted deletion listing (`status_filter=all`), post-purge fact cleanup, and cross-user `404` anti-enumeration checks.
+- **Frontend Foundation (Milestone F1):**
+  - Scaffolded `frontend/` with Vite 8, React 19, TypeScript 6, Tailwind CSS v4, React Router, TanStack Query, Zustand, React Hook Form + Zod, Recharts, and Vitest.
+  - Added design tokens (`src/styles/tokens.css`), Vite `/api` + `/health` proxy (`vite.config.ts`), full backend-aligned API contracts (`src/types/api.ts`), and centralized HTTP/blob client with `401` handling and `AM_ERR_*` parsing (`src/services/api-client.ts`).
 
 ### Changed
 - **Memory & Namespace Inspection Contracts:**
