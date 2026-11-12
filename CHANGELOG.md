@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Frontend Foundation (Milestone F1):**
   - Scaffolded `frontend/` with Vite 8, React 19, TypeScript 6, Tailwind CSS v4, React Router, TanStack Query, Zustand, React Hook Form + Zod, Recharts, and Vitest.
   - Added design tokens (`src/styles/tokens.css`), Vite `/api` + `/health` proxy (`vite.config.ts`), full backend-aligned API contracts (`src/types/api.ts`), and centralized HTTP/blob client with `401` handling and `AM_ERR_*` parsing (`src/services/api-client.ts`).
+  - **Frontend Authentication, Route Guards & Application Shell (Milestone F2):**
+  - Added `auth.service.ts`, `project.service.ts`, and Zustand stores (`auth.store.ts`, `workspace.store.ts`) synchronized with `401` token cleanup.
+  - Added `<ProtectedRoute />` (verifying `GET /api/v1/auth/me` before rendering workspace routes) and `<PublicOnlyRoute />`, plus two-column `/login` and `/register` pages using React Hook Form + Zod.
+  - Added collapsible `#171923` `<Sidebar />`, `<Topbar />` with active project selector + sign-out, `<AppShell />`, shared UI primitives (`Button`, `StatusBadge`, `MetricCard`, `StateViews`, `ToastContainer`), and Vitest route-guard tests (`src/test/auth-guard.test.tsx`).
 
 ### Changed
 - **Memory & Namespace Inspection Contracts:**
