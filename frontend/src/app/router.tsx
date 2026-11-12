@@ -5,6 +5,9 @@ import { MilestonePlaceholder } from '@/components/common/MilestonePlaceholder';
 import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
+import { ProjectsPage } from '@/features/projects/ProjectsPage';
 
 export function AppRoutes() {
   return (
@@ -17,36 +20,9 @@ export function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route
-            path="/dashboard"
-            element={
-              <MilestonePlaceholder
-                title="Dashboard"
-                description="Overview of your projects, benchmark experiments, and recent runs."
-                milestone="Milestone F3"
-              />
-            }
-          />
-          <Route
-            path="/projects"
-            element={
-              <MilestonePlaceholder
-                title="Projects"
-                description="Create and manage isolated research workspaces."
-                milestone="Milestone F3"
-              />
-            }
-          />
-          <Route
-            path="/projects/:projectId"
-            element={
-              <MilestonePlaceholder
-                title="Project Workspace"
-                description="Namespaces, datasets, experiments, sessions, and settings."
-                milestone="Milestone F3"
-              />
-            }
-          />
+          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
           <Route
             path="/memory-lab"
             element={
