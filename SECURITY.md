@@ -5,13 +5,14 @@
 | Version | Component | Status |
 |---|---|---|
 | `0.1.x` (`main`) | Backend API & Benchmarking Engine | Active development & supported |
+| `0.1.x` (`main`) | React + TypeScript Frontend (`Milestones F1–F3`) | Active development & supported |
 | `< 0.1.0` | Earlier milestone snapshots | Unsupported |
 
 ---
 
 ## Implemented Security Controls
 
-The following protections are implemented and covered by automated tests in `backend/tests/`:
+The following protections are implemented and covered by automated tests in `backend/tests/` and `frontend/src/test/`:
 
 ### 1. Authentication & Credential Protection
 - **Password Hashing:** Passwords are salted and hashed with native `bcrypt` (`backend/app/core/security.py`). Plaintext passwords are never stored or logged.
@@ -30,16 +31,20 @@ The following protections are implemented and covered by automated tests in `bac
 - **Zero-Leakage Deletion (`app/memory/lifecycle.py`):** Deleting a memory transitively purges `derives_from` consolidated summaries and child records, hard-deletes embeddings, facts, versions, and relations, and scrubs canonical text to `"[REDACTED]"` while retaining content-free audit events.
 - **Secret-Redacting Logs & Safe Error Envelopes:** `SafeLogFormatter` masks Bearer tokens, passwords, secrets, and API keys; global exception handlers return standardized `AM_ERR_*` JSON envelopes without exposing internal tracebacks on `500` errors.
 
+### 4. Frontend Route Guards & Client Session Handling
+- **Server-Verified Route Guards (`<ProtectedRoute />`):** Protected routes block workspace rendering until the stored JWT is verified against `GET /api/v1/auth/me` (verified in `frontend/src/test/auth-guard.test.tsx`).
+- **Automatic `401` Session Invalidation:** Any `401` response from the API clears auth state via `useAuthStore.logout()`, dispatches an unauthorized event, and redirects cleanly to `/login` while discarding stale tokens.
+- **Authenticated Report Blob Downloads:** Report downloads use `fetch` with `Authorization: Bearer <token>` headers rather than putting JWTs in URL query parameters or exposing unauthenticated static files.
+
 ---
 
 ## Known Limitations & Planned Hardening (Phase-2)
 
 Before exposing this service to the public internet, note the following items currently open:
 
-1. **Stateless Logout:** `POST /api/v1/auth/logout` relies on the client discarding its JWT; issued tokens remain valid until `ACCESS_TOKEN_EXPIRE_MINUTES` expires until a server-side `revoked_tokens` table / token rotation is added.
+1. **Stateless Logout & Client Token Storage:** `POST /api/v1/auth/logout` relies on the client discarding its JWT (stored in browser `localStorage`); issued tokens remain valid until `ACCESS_TOKEN_EXPIRE_MINUTES` expires. Adding a server-side `revoked_tokens` table, refresh-token rotation, or `HttpOnly`/`Secure`/`SameSite` cookie transport is planned for Phase-2 hardening.
 2. **Application Rate Limiting:** Auth (`/auth/register`, `/auth/login`) and compute-heavy benchmark/embedding endpoints do not yet enforce built-in API rate limits — place an API gateway or reverse-proxy rate limiter (e.g., Nginx / Caddy) in front in multi-user deployments.
 3. **Unauthenticated System/Catalog Routes:** `/`, `/health`, `/docs`, `/redoc`, and `GET /api/v1/architectures` (static built-in architecture defaults, zero user data) are intentionally public. Restrict `/docs`, `/redoc`, or `/architectures` in production if required.
-4. **Frontend Route Guards:** Browser-side `<ProtectedRoute />` navigation guards will be added as part of the upcoming React + TypeScript frontend.
 
 ---
 

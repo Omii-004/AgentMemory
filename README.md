@@ -5,7 +5,9 @@
 > **Central Research Question:**
 > *"Does a more sophisticated memory system actually improve an AI agent's ability to complete tasks reliably over time, or does it merely retrieve more information?"*
 
-> **Project Status:** Backend API & Benchmarking Engine v1.0 complete and verified (`21/21` pytest, `0` mypy issues across 62 files, `0` ruff errors). React + TypeScript Frontend coming next.
+> **Project Status:**
+> - **Backend API & Benchmarking Engine (`v1.0`):** Complete and verified (`21/21` pytest, `0` mypy issues across 62 files, `0` ruff errors).
+> - **Frontend Workspace (`Milestones F1–F3`):** Foundation, JWT auth + route guards, app shell, Dashboard, Projects list, and 6-tab Project Detail workspace complete and verified (`11/11` Vitest, `0` ESLint issues, production Vite build clean). Milestones F4–F6 (Memory Lab/Inspector, Benchmark Studio, Experiment Analytics & Reports) in progress.
 
 ---
 
@@ -37,6 +39,7 @@ AgentMemory implements four interchangeable memory architectures under a unified
   6. **Memory Deletion** (verifying zero retrieval or vector leakage)
 - **Quantitative Evaluation, Statistics & Observability:** Computes **Task Success Rate (TSR)**, **Precision@K**, **Recall@K**, **MRR**, latencies, token usage, **Memory Utility**, failure classifications, step-by-step execution traces, and paired statistical comparisons (95% CI, paired *t*-test, Wilcoxon signed-rank test, Cohen's *d*).
 - **Hardened RESTful API (`/api/v1`):** Auth, Projects, Sessions, Memory Lab & Consolidation, Memory Facts/Versions/Events Inspection, Datasets, Async Background Experiment Runs & Run History, Side-by-Side Architecture Comparisons, Expected-vs-Actual Failure Analysis, Statistical Analysis, Traces, JSON/CSV Report Management & Exports, strict cross-project tenant/namespace isolation, and standardized `AM_ERR_*` error envelopes.
+- **Research Frontend Workspace (`/frontend`):** React 19 + TypeScript workspace featuring verified `<ProtectedRoute />` authentication, collapsible workspace shell + active project switcher, real-time Dashboard KPIs, searchable Projects view, and 6-tab Project Detail workspace (`Overview`, `Namespaces`, `Datasets`, `Experiments`, `Sessions`, `Settings`).
 
 ---
 
@@ -45,9 +48,10 @@ AgentMemory implements four interchangeable memory architectures under a unified
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy 2.0 (asyncio), Alembic, Pydantic v2
 - **Database:** PostgreSQL 16 + `pgvector`
 - **Embeddings & Stats:** `sentence-transformers` (`all-MiniLM-L6-v2`), `numpy`, `scipy`, `scikit-learn`, `pandas`
-- **Security:** JWT (`python-jose`), native `bcrypt` password hashing, multi-tenant project & namespace isolation, secret-redacting log formatter
-- **Testing & Quality:** `pytest`, `pytest-asyncio`, `httpx` (`ASGITransport`), `mypy`, `ruff`
-- **Package Manager:** `uv`
+- **Frontend:** React 19, TypeScript 6, Vite 8, Tailwind CSS v4, React Router v7, TanStack Query v5, Zustand v5, React Hook Form + Zod, Recharts, Lucide React
+- **Security:** JWT (`python-jose`), native `bcrypt` password hashing, multi-tenant project & namespace isolation, secret-redacting log formatter, strict frontend auth verification (`GET /api/v1/auth/me`)
+- **Testing & Quality:** `pytest`, `pytest-asyncio`, `httpx` (`ASGITransport`), `mypy`, `ruff`, `vitest`, `@testing-library/react`, `eslint`
+- **Package Managers:** `uv` (backend), `npm` (frontend)
 - **Containers:** Docker Compose
 
 ---
@@ -86,12 +90,35 @@ uvicorn app.main:app --reload
 * **Interactive Swagger Docs:** http://127.0.0.1:8000/docs
 * **Health Check:** http://127.0.0.1:8000/health
 
-### 6. Run Tests & Quality Checks
+### 6. Run Backend Tests & Quality Checks
 ```bash
 cd backend
 .venv/bin/pytest -v
 .venv/bin/mypy app
 .venv/bin/ruff check app tests
+```
+
+---
+
+## Getting Started (Frontend)
+
+With PostgreSQL and the FastAPI backend running on `:8000`:
+
+### 1. Install Dependencies & Start Dev Server
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+* **Web App:** http://localhost:5173/ (Vite automatically proxies `/api` and `/health` to `http://127.0.0.1:8000`)
+
+### 2. Run Frontend Checks & Tests
+```bash
+cd frontend
+npm run lint
+npm run build
+npm test
 ```
 
 ---
@@ -123,4 +150,18 @@ AgentMemory/
 │       ├── observability/          # Execution TraceCollector
 │       ├── schemas/                # Pydantic v2 API request/response contracts
 │       └── api/                    # Tenant-isolated dependencies & /api/v1 routers
+└── frontend/
+    ├── package.json                # React 19, Vite 8, Tailwind v4, Vitest dependencies
+    ├── vite.config.ts              # Vite build + /api & /health backend proxy config
+    ├── vitest.config.ts            # JSDOM test runner configuration
+    └── src/
+        ├── app/                    # AppProviders (QueryClient, ToastContainer) & AppRouter
+        ├── components/             # Auth route guards, AppShell/Sidebar/Topbar, shared UI primitives
+        ├── features/               # Auth pages, Dashboard, Projects list & 6-tab Project Detail workspace
+        ├── lib/                    # Formatting and UI utility helpers
+        ├── services/               # Centralized API client (AM_ERR_* & 401 handling) + typed resource services
+        ├── stores/                 # Zustand auth & workspace state stores
+        ├── styles/                 # Design tokens (tokens.css) & Tailwind theme setup
+        ├── types/                  # TypeScript API request/response interfaces matching backend schemas
+        └── test/                   # Vitest component & route-guard integration tests
 ```
