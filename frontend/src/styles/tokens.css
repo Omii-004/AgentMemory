@@ -1,0 +1,14 @@
+:root {
+  --am-primary: #635BDB;
+  --am-primary-hover: #5149C6;
+  --am-bg: #F7F8FA;
+  --am-surface: #FFFFFF;
+  --am-sidebar: #171923;
+  --am-text-primary: #20232E;
+  --am-text-secondary: #747986;
+  --am-border: #E5E7EB;
+  --am-success: #16865C;
+  --am-warning: #C58A25;
+  --am-error: #D34D55;
+  --am-info: #3478C5;
+}
