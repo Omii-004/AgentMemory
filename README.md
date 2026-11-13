@@ -7,7 +7,7 @@
 
 > **Project Status:**
 > - **Backend API & Benchmarking Engine (`v1.0`):** Complete and verified (`21/21` pytest, `0` mypy issues across 62 files, `0` ruff errors).
-> - **Frontend Workspace (`Milestones F1–F3`):** Foundation, JWT auth + route guards, app shell, Dashboard, Projects list, and 6-tab Project Detail workspace complete and verified (`11/11` Vitest, `0` ESLint issues, production Vite build clean). Milestones F4–F6 (Memory Lab/Inspector, Benchmark Studio, Experiment Analytics & Reports) in progress.
+> - **Frontend Workspace (`Milestones F1–F4`):** Foundation, JWT auth + route guards, app shell, Dashboard, Projects list, 6-tab Project Detail workspace, Memory Lab, and 3-panel Memory Inspector complete and verified (`13/13` Vitest, `0` ESLint issues, production Vite build clean). Milestones F5–F6 (Benchmark Studio, Experiment Analytics & Reports) in progress.
 
 ---
 

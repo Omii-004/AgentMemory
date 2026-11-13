@@ -5,7 +5,7 @@
 | Version | Component | Status |
 |---|---|---|
 | `0.1.x` (`main`) | Backend API & Benchmarking Engine | Active development & supported |
-| `0.1.x` (`main`) | React + TypeScript Frontend (`Milestones F1–F3`) | Active development & supported |
+| `0.1.x` (`main`) | React + TypeScript Frontend (`Milestones F1–F4`) | Active development & supported |
 | `< 0.1.0` | Earlier milestone snapshots | Unsupported |
 
 ---
@@ -30,6 +30,7 @@ The following protections are implemented and covered by automated tests in `bac
 - **Ground-Truth Separation:** `GroundTruthEvaluator` executes strictly outside memory architectures and LLM prompts.
 - **Zero-Leakage Deletion (`app/memory/lifecycle.py`):** Deleting a memory transitively purges `derives_from` consolidated summaries and child records, hard-deletes embeddings, facts, versions, and relations, and scrubs canonical text to `"[REDACTED]"` while retaining content-free audit events.
 - **Secret-Redacting Logs & Safe Error Envelopes:** `SafeLogFormatter` masks Bearer tokens, passwords, secrets, and API keys; global exception handlers return standardized `AM_ERR_*` JSON envelopes without exposing internal tracebacks on `500` errors.
+- **Frontend Zero-Leakage Purge UI:** The Memory Inspector provides dedicated zero-leakage deletion controls with confirmation safeguards, permanently displaying `[REDACTED]` notices on purged records and disabling further edits.
 
 ### 4. Frontend Route Guards & Client Session Handling
 - **Server-Verified Route Guards (`<ProtectedRoute />`):** Protected routes block workspace rendering until the stored JWT is verified against `GET /api/v1/auth/me` (verified in `frontend/src/test/auth-guard.test.tsx`).
