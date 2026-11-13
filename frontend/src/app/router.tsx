@@ -6,6 +6,8 @@ import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
+import { MemoryInspectorPage } from '@/features/memory-inspector/MemoryInspectorPage';
+import { MemoryLabPage } from '@/features/memory-lab/MemoryLabPage';
 import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
 import { ProjectsPage } from '@/features/projects/ProjectsPage';
 
@@ -23,26 +25,8 @@ export function AppRoutes() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
-          <Route
-            path="/memory-lab"
-            element={
-              <MilestonePlaceholder
-                title="Memory Lab"
-                description="Configure, compare, store, retrieve, and consolidate memory architectures."
-                milestone="Milestone F4"
-              />
-            }
-          />
-          <Route
-            path="/memory-inspector"
-            element={
-              <MilestonePlaceholder
-                title="Memory Inspector"
-                description="Inspect stored memories, extracted facts, versions, and lifecycle events."
-                milestone="Milestone F4"
-              />
-            }
-          />
+          <Route path="/memory-lab" element={<MemoryLabPage />} />
+          <Route path="/memory-inspector" element={<MemoryInspectorPage />} />
           <Route
             path="/benchmark-studio"
             element={
