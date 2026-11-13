@@ -24,7 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added API services (`memory.service.ts`, `dataset.service.ts`, `experiment.service.ts`) and accessible `<Modal />` primitive (`Modal.tsx`).
   - Implemented `<DashboardPage />` with live project, experiment, dataset, namespace, report, and real run-status summaries (`Completed Runs` / `Active Runs`).
   - Implemented `<ProjectsPage />`, `<CreateProjectModal />`, and 6-tab `<ProjectDetailPage />` (`Overview`, `Namespaces`, `Datasets`, `Experiments`, `Sessions`, `Settings`) plus Vitest workflow tests (`src/test/projects-dashboard.test.tsx`).
-
+- **Frontend Memory Lab & Memory Inspector (Milestone F4):**
+  - Implemented `<MemoryLabPage />` with 4 built-in architecture catalog cards (`History`, `Vector`, `Structured`, `Hybrid`), active project memory namespace manager with JSON config editor, and an interactive 3-tab workbench supporting live `Store Memory`, `Retrieve Memories` (with Top-K and optional `as_of` temporal evaluation), and `Semantic Consolidation` (with `derives_from` provenance linking).
+  - Implemented `<MemoryInspectorPage />` using a responsive 3-panel desktop layout (`Filters` | `Memory Records List` | `Memory Details & Lifecycle Drawer`) supporting namespace selection (manual vs benchmark run stores), lifecycle status filtering (`active`, `superseded`, `consolidated`, `deleted`, `all`), type filtering, and real-time text/UUID search.
+  - Added deep memory record inspection: full content view, Extracted Facts table (`GET /memories/:id/facts`), Monotonic Version History (`GET /memories/:id/versions`), Lifecycle Event Timeline (`GET /memories/:id/events`), inline record editing, and zero-leakage deletion purging with permanent `[REDACTED]` scrubbing.
+  - Added Vitest workflow tests for Memory Lab & Inspector (`src/test/memory-lab-inspector.test.tsx`).
+  
 ### Changed
 - **Memory & Namespace Inspection Contracts:**
   - Added `run_id` to `NamespaceResponse` and an optional `include_run_namespaces` query parameter (default `true`, ordered newest-first) on `GET /api/v1/projects/{project_id}/memory-namespaces`.
