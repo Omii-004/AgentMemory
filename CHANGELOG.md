@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented `<ExperimentWizard />` 6-step guided workflow: Step 1 Details, Step 2 Architecture selection (`History`, `Vector`, `Structured`, `Hybrid` with per-architecture configuration overrides), Step 3 Dataset selection, Step 4 Evaluator Model (`mock` offline evaluator, `ollama`, `openai_compatible`), Step 5 Execution Controls (`num_trials`, `seed`), and Step 6 Pre-flight Review & Launch (`createExperiment` + `startRun`).
   - Implemented `<RunMonitor />` with real-time run execution polling (`refetchInterval: 2000`), progress bar, per-architecture status grid with live step metrics, live task stream table, active run cancellation modal (`cancelRun`), and direct links to Analytics and Reports.
   - Added Vitest workflow tests for Benchmark Studio (`src/test/benchmark-studio.test.tsx`).
+- **Frontend Experiment Analytics, Reports & Complete Platform (Milestone F6):**
+  - Implemented `<AnalyticsPage />` (`/analytics`) with multi-experiment and run switcher, run overview KPIs (TSR, Precision@K, Recall@K, MRR, Memory Utility, Latency, Token Usage), side-by-side architecture comparison matrix with top-performer badges, and Recharts visualizations (Task Success by Architecture, 6-Category Accuracy Breakdown, Latency vs Resource Efficiency).
+  - Added statistical significance panel: 95% Confidence Intervals table (`descriptive_ci_95`), pairwise hypothesis testing (`pairwise_comparisons` with Student's t-test, Wilcoxon signed-rank test, Cohen's d effect size, and p < 0.05 significance badges).
+  - Added failure analysis table with architecture and category filters, expected vs actual snapshots, retrieved memory IDs, and interactive execution trace inspection drawer (`GET /traces/{id}`).
+  - Implemented `<ReportsPage />` (`/reports`) with project-wide report history, report generator modal supporting JSON archives and flattened CSV datasets (`generateReport`), authenticated blob file downloads (`downloadReportFile`), and formatted client-side JSON preview modal (`ReportPreviewModal`).
+  - Added automated workflow test suite (`src/test/analytics-reports.test.tsx`).
+  - Verified all 5 test suites (18/18 Vitest tests passing, 0 ESLint warnings, production build clean).
   
 ### Changed
 - **Memory & Namespace Inspection Contracts:**
