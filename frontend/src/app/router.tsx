@@ -5,6 +5,7 @@ import { MilestonePlaceholder } from '@/components/common/MilestonePlaceholder';
 import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
+import { BenchmarkStudioPage } from '@/features/benchmark-studio/BenchmarkStudioPage';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { MemoryInspectorPage } from '@/features/memory-inspector/MemoryInspectorPage';
 import { MemoryLabPage } from '@/features/memory-lab/MemoryLabPage';
@@ -27,16 +28,7 @@ export function AppRoutes() {
           <Route path="/projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="/memory-lab" element={<MemoryLabPage />} />
           <Route path="/memory-inspector" element={<MemoryInspectorPage />} />
-          <Route
-            path="/benchmark-studio"
-            element={
-              <MilestonePlaceholder
-                title="Benchmark Studio"
-                description="Generate or import benchmark tasks and run multi-architecture evaluations."
-                milestone="Milestone F5"
-              />
-            }
-          />
+          <Route path="/benchmark-studio" element={<BenchmarkStudioPage />} />
           <Route
             path="/analytics"
             element={
