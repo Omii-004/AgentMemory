@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented `<MemoryInspectorPage />` using a responsive 3-panel desktop layout (`Filters` | `Memory Records List` | `Memory Details & Lifecycle Drawer`) supporting namespace selection (manual vs benchmark run stores), lifecycle status filtering (`active`, `superseded`, `consolidated`, `deleted`, `all`), type filtering, and real-time text/UUID search.
   - Added deep memory record inspection: full content view, Extracted Facts table (`GET /memories/:id/facts`), Monotonic Version History (`GET /memories/:id/versions`), Lifecycle Event Timeline (`GET /memories/:id/events`), inline record editing, and zero-leakage deletion purging with permanent `[REDACTED]` scrubbing.
   - Added Vitest workflow tests for Memory Lab & Inspector (`src/test/memory-lab-inspector.test.tsx`).
+- **Frontend Benchmark Studio (Milestone F5):**
+  - Implemented `<BenchmarkStudioPage />` with tab navigation between `wizard`, `monitor`, and `datasets`, plus active project validation.
+  - Implemented `<DatasetManager />` supporting dataset creation, conversational task inspection with turn viewers, bulk JSON task import, dataset schema validation (`validateDataset`), and automated 6-category Synthetic Benchmark Generation (`generateSyntheticTasks`).
+  - Implemented `<ExperimentWizard />` 6-step guided workflow: Step 1 Details, Step 2 Architecture selection (`History`, `Vector`, `Structured`, `Hybrid` with per-architecture configuration overrides), Step 3 Dataset selection, Step 4 Evaluator Model (`mock` offline evaluator, `ollama`, `openai_compatible`), Step 5 Execution Controls (`num_trials`, `seed`), and Step 6 Pre-flight Review & Launch (`createExperiment` + `startRun`).
+  - Implemented `<RunMonitor />` with real-time run execution polling (`refetchInterval: 2000`), progress bar, per-architecture status grid with live step metrics, live task stream table, active run cancellation modal (`cancelRun`), and direct links to Analytics and Reports.
+  - Added Vitest workflow tests for Benchmark Studio (`src/test/benchmark-studio.test.tsx`).
   
 ### Changed
 - **Memory & Namespace Inspection Contracts:**

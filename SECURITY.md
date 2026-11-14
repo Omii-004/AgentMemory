@@ -5,7 +5,7 @@
 | Version | Component | Status |
 |---|---|---|
 | `0.1.x` (`main`) | Backend API & Benchmarking Engine | Active development & supported |
-| `0.1.x` (`main`) | React + TypeScript Frontend (`Milestones F1–F4`) | Active development & supported |
+| `0.1.x` (`main`) | React + TypeScript Frontend (`Milestones F1–F5`) | Active development & supported |
 | `< 0.1.0` | Earlier milestone snapshots | Unsupported |
 
 ---
