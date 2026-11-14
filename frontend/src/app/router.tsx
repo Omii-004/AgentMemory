@@ -1,8 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { PublicOnlyRoute } from '@/components/auth/PublicOnlyRoute';
-import { MilestonePlaceholder } from '@/components/common/MilestonePlaceholder';
 import { AppShell } from '@/components/layout/AppShell';
+import { AnalyticsPage } from '@/features/analytics/AnalyticsPage';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { RegisterPage } from '@/features/auth/RegisterPage';
 import { BenchmarkStudioPage } from '@/features/benchmark-studio/BenchmarkStudioPage';
@@ -11,6 +11,7 @@ import { MemoryInspectorPage } from '@/features/memory-inspector/MemoryInspector
 import { MemoryLabPage } from '@/features/memory-lab/MemoryLabPage';
 import { ProjectDetailPage } from '@/features/projects/ProjectDetailPage';
 import { ProjectsPage } from '@/features/projects/ProjectsPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
 
 export function AppRoutes() {
   return (
@@ -29,26 +30,8 @@ export function AppRoutes() {
           <Route path="/memory-lab" element={<MemoryLabPage />} />
           <Route path="/memory-inspector" element={<MemoryInspectorPage />} />
           <Route path="/benchmark-studio" element={<BenchmarkStudioPage />} />
-          <Route
-            path="/analytics"
-            element={
-              <MilestonePlaceholder
-                title="Experiment Analytics"
-                description="Compare metrics, 95% confidence intervals, failures, and execution traces."
-                milestone="Milestone F6"
-              />
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <MilestonePlaceholder
-                title="Reports"
-                description="Generate and download machine-readable JSON and CSV evaluation reports."
-                milestone="Milestone F6"
-              />
-            }
-          />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/reports" element={<ReportsPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Route>

@@ -1,4 +1,4 @@
-import { downloadBlob, requestData } from '@/services/api-client';
+import { downloadBlob, getStoredToken, requestData } from '@/services/api-client';
 import type {
   ComparisonResponse,
   ExecutionTraceResponse,
@@ -127,4 +127,17 @@ export async function downloadReportFile(
   fallbackFilename: string,
 ): Promise<void> {
   return downloadBlob(`/reports/${reportId}/download`, fallbackFilename);
+}
+
+export async function getReportContent(reportId: string): Promise<Record<string, unknown>> {
+  const token = getStoredToken();
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`/api/v1/reports/${reportId}/download`, { headers });
+  if (!response.ok) {
+    throw new Error('Failed to load report contents');
+  }
+  return (await response.json()) as Record<string, unknown>;
 }
