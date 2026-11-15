@@ -1,10 +1,14 @@
 import asyncio
+import logging
 import time
+from typing import Any
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import Settings
 from app.llm.base import BaseLLMAdapter, LLMResponse
+
+logger = logging.getLogger(__name__)
 
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -19,14 +23,21 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
         base_url: str | None = None,
         max_retries: int = 2,
     ):
-        super().__init__(model_name=model_name or settings.DEFAULT_LLM_MODEL)
-        self.api_key = (api_key if api_key is not None else settings.OPENAI_API_KEY).strip()
-        self.base_url = (base_url or settings.OPENAI_BASE_URL).rstrip("/")
+        fresh_settings = Settings()
+        super().__init__(model_name=model_name or fresh_settings.DEFAULT_LLM_MODEL)
+        self.api_key = (api_key if api_key is not None else fresh_settings.OPENAI_API_KEY).strip()
+        self.base_url = (base_url or fresh_settings.OPENAI_BASE_URL).rstrip("/")
         self.max_retries = max_retries
 
         is_local = "localhost" in self.base_url or "127.0.0.1" in self.base_url
         if not self.api_key and not is_local:
             raise ValueError("OPENAI_API_KEY is required when using a remote OpenAI-compatible provider.")
+
+        logger.info(
+            "Initialized OpenAICompatibleLLMAdapter [endpoint: %s/chat/completions, model: %s]",
+            self.base_url,
+            self.model_name,
+        )
 
     async def generate(
         self,
@@ -41,7 +52,11 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://agentmemory.ai",
+            "X-Title": "AgentMemory Benchmark",
+        }
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
@@ -53,45 +68,57 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
         }
 
         last_exc: Exception | None = None
-        data: dict = {}
+        data: dict[str, Any] = {}
+        endpoint = f"{self.base_url}/chat/completions"
+        logger.info("Connecting to LLM endpoint: %s (model: %s)", endpoint, self.model_name)
+
         async with httpx.AsyncClient(timeout=60.0) as client:
             for attempt in range(self.max_retries + 1):
                 try:
                     response = await client.post(
-                        f"{self.base_url}/chat/completions",
+                        endpoint,
                         headers=headers,
                         json=payload,
                     )
                     if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self.max_retries:
+                        logger.warning(
+                            "Retryable HTTP %s from %s, retrying attempt %d...",
+                            response.status_code,
+                            endpoint,
+                            attempt + 1,
+                        )
                         await asyncio.sleep(0.5 * (attempt + 1))
                         continue
                     response.raise_for_status()
                     data = response.json()
                     break
-                except (httpx.TimeoutException, httpx.ConnectError) as exc:
+                except httpx.HTTPError as exc:
                     last_exc = exc
+                    logger.warning("HTTP error on %s attempt %d: %s", endpoint, attempt + 1, exc)
                     if attempt < self.max_retries:
                         await asyncio.sleep(0.5 * (attempt + 1))
-                        continue
-                    raise
-            else:
-                if last_exc:
-                    raise last_exc
+                    else:
+                        raise
 
-        latency = (time.perf_counter() - start_time) * 1000
-        choices = data.get("choices") or []
+        latency_ms = (time.perf_counter() - start_time) * 1000.0
+
+        choices = data.get("choices", [])
         if not choices:
-            raise RuntimeError("OpenAI-compatible response contained no choices.")
+            raise ValueError(f"Empty choices in OpenAI response: {data}")
+
         choice = choices[0]
-        text_out = choice["message"]["content"]
+        text = choice.get("message", {}).get("content", "").strip()
         usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
 
         return LLMResponse(
-            text=text_out,
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            total_tokens=usage.get("total_tokens", 0),
-            latency_ms=round(latency, 2),
+            text=text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            latency_ms=round(latency_ms, 2),
             model_name=self.model_name,
-            metadata={"finish_reason": choice.get("finish_reason")},
+            metadata=data,
         )

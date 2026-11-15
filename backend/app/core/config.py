@@ -1,9 +1,12 @@
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+if ROOT_ENV_FILE.exists():
+    load_dotenv(ROOT_ENV_FILE, override=True)
 
 
 class Settings(BaseSettings):
