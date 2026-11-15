@@ -106,13 +106,20 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
         if not choices:
             raise ValueError(f"Empty choices in OpenAI response: {data}")
 
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError(f"Empty choices in OpenAI response: {data}")
         choice = choices[0]
-        text = choice.get("message", {}).get("content", "").strip()
-        usage = data.get("usage", {})
-        prompt_tokens = usage.get("prompt_tokens", 0)
-        completion_tokens = usage.get("completion_tokens", 0)
-        total_tokens = usage.get("total_tokens", prompt_tokens + completion_tokens)
-
+        msg = choice.get("message") or {}
+        raw_text = msg.get("content")
+        if raw_text is None:
+            # Fall back to reasoning_content, refusal, or choice text if content is None
+            raw_text = msg.get("reasoning_content") or msg.get("refusal") or choice.get("text") or ""
+        text = str(raw_text).strip()
+        usage = data.get("usage") or {}
+        prompt_tokens = usage.get("prompt_tokens") or 0
+        completion_tokens = usage.get("completion_tokens") or 0
+        total_tokens = usage.get("total_tokens") or (prompt_tokens + completion_tokens)
         return LLMResponse(
             text=text,
             prompt_tokens=prompt_tokens,
