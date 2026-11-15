@@ -358,11 +358,22 @@ async def compare_architectures(run_id: uuid.UUID, db: AsyncSession = Depends(ge
                 metrics_data["categories"][m.category] = float(m.metric_value)
             else:
                 metrics_data[m.metric_name] = float(m.metric_value)
+
+        # Fallback to summing TaskResult tokens if missing or zero in MetricResult
+        if "total_tokens" not in metrics_data or metrics_data["total_tokens"] == 0:
+            token_sum = await db.scalar(
+                select(func.coalesce(func.sum(TaskResult.total_tokens), 0)).where(
+                    TaskResult.run_architecture_id == ra.id
+                )
+            )
+            metrics_data["total_tokens"] = int(token_sum or 0)
+
         comparison[ra.architecture_type] = metrics_data
 
-    return APIResponse(message="Architecture comparison generated", data={"run_id": str(run.id), "status": run.status, "architectures": comparison})
-
-
+    return APIResponse(
+        message="Architecture comparison generated",
+        data={"run_id": str(run.id), "status": run.status, "architectures": comparison},
+    )
 @router.get("/runs/{run_id}/statistics", response_model=APIResponse[dict[str, Any]])
 async def get_run_statistics(
     run_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
