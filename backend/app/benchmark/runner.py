@@ -423,6 +423,7 @@ class BenchmarkRunner:
                     ("avg_llm_latency_ms", agg.get("avg_llm_latency_ms", 0.0), "ms", None),
                     ("avg_total_latency_ms", agg.get("avg_total_latency_ms", 0.0), "ms", None),
                     ("avg_tokens_per_task", agg.get("avg_tokens_per_task", 0.0), "tokens", None),
+                    ("total_tokens", agg.get("total_tokens", 0), "tokens", None),
                     ("memory_utility", agg.get("memory_utility", 0.0), "score", None),
                 ]
                 for cat, acc in agg.get("category_accuracies", {}).items():
