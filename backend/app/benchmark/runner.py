@@ -193,7 +193,9 @@ class BenchmarkRunner:
 
                         try:
                             # Isolate each task cleanly by clearing the namespace
-                            await memory_engine.clear()
+                            clear_res = await memory_engine.clear()
+                            if clear_res.status == "error":
+                                raise RuntimeError(clear_res.error_message or "Memory clear error")
 
                             # Step A: Conversation Replay (Memory Formation)
                             for turn in conv_seq:
@@ -226,14 +228,18 @@ class BenchmarkRunner:
 
                             if operation == "delete":
                                 for del_id in delete_target_ids:
-                                    await memory_engine.delete(del_id)
+                                    del_res = await memory_engine.delete(del_id)
+                                    if del_res.status == "error":
+                                        raise RuntimeError(del_res.error_message or "Memory delete error")
                             elif operation == "update" and eval_query.get("update_content"):
                                 update_targets = required_memory_ids or all_stored_ids[-1:]
                                 for upd_id in update_targets:
-                                    await memory_engine.update(
+                                    upd_res = await memory_engine.update(
                                         upd_id,
                                         MemoryItem(content=str(eval_query["update_content"])),
                                     )
+                                    if upd_res.status == "error":
+                                        raise RuntimeError(upd_res.error_message or "Memory update error")                          
 
                             ret_res = await memory_engine.retrieve(query=question, top_k=top_k)
                             if ret_res.status == "error":
@@ -318,6 +324,7 @@ class BenchmarkRunner:
                                     "retrieved_ids": ret_res.retrieved_memory_ids,
                                 },
                             )
+                            await self.db.commit()
 
                             arch_task_records.append({
                                 "category": task_category,
