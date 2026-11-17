@@ -1,14 +1,14 @@
 import asyncio
-import logging
 import time
 from typing import Any
 
 import httpx
 
 from app.core.config import Settings
+from app.core.logging import get_logger
 from app.llm.base import BaseLLMAdapter, LLMResponse
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
@@ -67,7 +67,7 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
             "temperature": temperature,
         }
 
-        last_exc: Exception | None = None
+        last_response: httpx.Response | None = None
         data: dict[str, Any] = {}
         endpoint = f"{self.base_url}/chat/completions"
         logger.info("Connecting to LLM endpoint: %s (model: %s)", endpoint, self.model_name)
@@ -80,6 +80,7 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
                         headers=headers,
                         json=payload,
                     )
+                    last_response = response
                     if response.status_code in _RETRYABLE_STATUS_CODES and attempt < self.max_retries:
                         logger.warning(
                             "Retryable HTTP %s from %s, retrying attempt %d...",
@@ -93,7 +94,6 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
                     data = response.json()
                     break
                 except httpx.HTTPError as exc:
-                    last_exc = exc
                     logger.warning("HTTP error on %s attempt %d: %s", endpoint, attempt + 1, exc)
                     if attempt < self.max_retries:
                         await asyncio.sleep(0.5 * (attempt + 1))
@@ -102,12 +102,10 @@ class OpenAICompatibleLLMAdapter(BaseLLMAdapter):
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
-        choices = data.get("choices", [])
-        if not choices:
-            raise ValueError(f"Empty choices in OpenAI response: {data}")
-
         choices = data.get("choices") or []
         if not choices:
+            if last_response is not None and last_response.status_code != 200:
+                last_response.raise_for_status()
             raise ValueError(f"Empty choices in OpenAI response: {data}")
         choice = choices[0]
         msg = choice.get("message") or {}
