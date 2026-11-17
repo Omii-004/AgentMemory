@@ -52,7 +52,8 @@ async def login_swagger_oauth2(
     form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)
 ):
     """Compatibility route for Swagger UI's OAuth2 Authorize dialog."""
-    res = await db.execute(select(User).where(User.email == form_data.username))
+    normalized_email = form_data.username.strip().lower()
+    res = await db.execute(select(User).where(User.email == normalized_email))
     user = res.scalars().first()
     if not user or not user.password_hash or not verify_password(form_data.password, user.password_hash):
         raise UnauthorizedException("Incorrect email or password.")
