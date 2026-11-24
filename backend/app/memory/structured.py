@@ -25,6 +25,39 @@ _STOP_WORDS = {
     "my", "our", "your", "their", "its", "this", "that", "list", "currently",
 }
 
+def extract_triples_fallback(text: str) -> tuple[str, str, str]:
+        """Rule-based triple extractor when explicit S-P-O attributes are not passed."""
+        clean = text.strip().rstrip(".!?")
+        patterns = [
+            r"^(?:my|our)\s+(?P<pred>preferred \w+|\w+)\s+is\s+(?P<obj>[\w\s\.\-]+)$",
+            r"^(?P<sub>[\w\s]+?)'s\s+(?P<pred>preferred \w+|\w+)\s+is\s+(?P<obj>[\w\s\.\-]+)$",
+            r"^(?P<sub>[\w\s]+?)\s+(?P<pred>prefers|prefer|uses|used|migrated to|switched to|is|works with|learned)\s+(?P<obj>[\w\s\.\-]+)$",
+        ]
+        # Check first-person possessive pattern ("My preferred X is Y")
+        m0 = re.match(patterns[0], clean, re.IGNORECASE)
+        if m0:
+            return (
+                "User",
+                m0.group("pred").strip().lower().replace(" ", "_"),
+                m0.group("obj").strip(),
+            )
+        # Check possessive pattern ("Team's preferred X is Y")
+        m1 = re.match(patterns[1], clean, re.IGNORECASE)
+        if m1:
+            return (
+                m1.group("sub").strip().title(),
+                m1.group("pred").strip().lower().replace(" ", "_"),
+                m1.group("obj").strip(),
+            )
+        # Check subject-verb-object pattern ("User prefers Python")
+        m2 = re.match(patterns[2], clean, re.IGNORECASE)
+        if m2:
+            return (
+                m2.group("sub").strip().title(),
+                m2.group("pred").strip().lower().replace(" ", "_"),
+                m2.group("obj").strip(),
+            )
+        return ("User", "states", clean)
 
 class StructuredMemory(BaseMemory):
     """
@@ -36,23 +69,6 @@ class StructuredMemory(BaseMemory):
     @property
     def architecture_type(self) -> str:
         return "structured"
-
-    def _extract_triples_fallback(self, text: str) -> tuple[str, str, str]:
-        """Rule-based triple extractor when explicit S-P-O attributes are not passed."""
-        clean = text.strip().rstrip(".!?")
-        patterns = [
-            r"^(?P<sub>[\w\s]+?)\s+(?P<pred>prefers|uses|migrated to|switched to|is|works with|learned)\s+(?P<obj>[\w\s\.\-]+)$",
-            r"^(?P<sub>[\w\s]+?)'s\s+(?P<pred>preferred \w+|\w+)\s+is\s+(?P<obj>[\w\s\.\-]+)$",
-        ]
-        for pattern in patterns:
-            match = re.match(pattern, clean, re.IGNORECASE)
-            if match:
-                return (
-                    match.group("sub").strip().title(),
-                    match.group("pred").strip().lower(),
-                    match.group("obj").strip(),
-                )
-        return ("User", "states", clean)
 
     def _get_reference_time(self) -> tuple[datetime, bool]:
         as_of = self.config.get("as_of")
@@ -70,7 +86,7 @@ class StructuredMemory(BaseMemory):
         if item.subject and item.predicate and item.object_value:
             sub, pred, obj = item.subject.strip(), item.predicate.strip(), item.object_value.strip()
         else:
-            sub, pred, obj = self._extract_triples_fallback(item.content)
+            sub, pred, obj = extract_triples_fallback(item.content)
 
         valid_from = ensure_utc(item.valid_from) or now
         valid_to = ensure_utc(item.valid_to)
@@ -262,7 +278,7 @@ class StructuredMemory(BaseMemory):
             if new_item.object_value is not None:
                 fact.object_value = new_item.object_value.strip()
             elif new_item.content:
-                sub, pred, obj = self._extract_triples_fallback(new_item.content)
+                sub, pred, obj = extract_triples_fallback(new_item.content)
                 if pred != "states":
                     if new_item.subject is None:
                         fact.subject = sub
