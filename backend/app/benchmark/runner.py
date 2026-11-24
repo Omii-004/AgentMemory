@@ -451,14 +451,16 @@ class BenchmarkRunner:
                 run_arch.completed_at = datetime.now(UTC)
                 await self.db.commit()
 
-            # Re-fetch fresh run state to prevent race overwriting a cancel triggered during final architecture
+            # Refresh run state directly from database to prevent overwriting an external cancellation
             final_run = (
                 await self.db.execute(select(ExperimentRun).where(ExperimentRun.id == run_id))
             ).scalars().first()
-            if final_run and final_run.status != "cancelled":
-                final_run.status = "completed"
-                final_run.completed_at = datetime.now(UTC)
-                await self.db.commit()
+            if final_run:
+                await self.db.refresh(final_run)
+                if final_run.status != "cancelled":
+                    final_run.status = "completed"
+                    final_run.completed_at = datetime.now(UTC)
+                    await self.db.commit()
 
         except Exception as e:
             logger.exception("Benchmark run %s failed", run_id)
@@ -469,9 +471,11 @@ class BenchmarkRunner:
                 )
                 failed_run = err_res.scalars().first()
                 if failed_run:
-                    failed_run.status = "failed"
-                    failed_run.error_message = str(e)
-                    failed_run.completed_at = datetime.now(UTC)
-                    await self.db.commit()
+                    await self.db.refresh(failed_run)
+                    if failed_run.status != "cancelled":
+                        failed_run.status = "failed"
+                        failed_run.error_message = str(e)
+                        failed_run.completed_at = datetime.now(UTC)
+                        await self.db.commit()
             except Exception:
                 logger.exception("Failed to persist failed status for run %s", run_id)
