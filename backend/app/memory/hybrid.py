@@ -20,6 +20,7 @@ from app.embeddings.service import get_embedding_service
 from app.memory.base import BaseMemory
 from app.memory.lifecycle import ensure_utc, purge_memory_record, purge_namespace_memories
 from app.memory.schemas import MemoryItem, RetrievedMemory
+from app.memory.structured import extract_triples_fallback
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
 _STOP_WORDS = {
@@ -328,7 +329,15 @@ class HybridMemory(BaseMemory):
             if new_item.object_value is not None:
                 fact.object_value = new_item.object_value.strip()
             elif new_item.content:
-                fact.object_value = new_item.content.strip()
+                sub, pred, obj = extract_triples_fallback(new_item.content)
+                if pred != "states":
+                    if new_item.subject is None:
+                        fact.subject = sub
+                    if new_item.predicate is None:
+                        fact.predicate = pred
+                    fact.object_value = obj
+                else:
+                    fact.object_value = new_item.content.strip()
             if new_item.valid_from is not None:
                 fact.valid_from = ensure_utc(new_item.valid_from)
             if new_item.valid_to is not None:
