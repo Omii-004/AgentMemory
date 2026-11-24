@@ -167,13 +167,14 @@ class StructuredMemory(BaseMemory):
             keyword_filters.append(MemoryFact.subject.ilike(f"%{word}%"))
             keyword_filters.append(MemoryFact.predicate.ilike(f"%{word}%"))
             keyword_filters.append(MemoryFact.object_value.ilike(f"%{word}%"))
+            keyword_filters.append(Memory.content.ilike(f"%{word}%"))
 
         if keyword_filters:
             conditions.append(or_(*keyword_filters))
 
         stmt = (
             select(Memory, MemoryFact)
-            .join(MemoryFact, Memory.id == MemoryFact.memory_id)
+            .outerjoin(MemoryFact, Memory.id == MemoryFact.memory_id)
             .where(*conditions)
             .order_by(Memory.created_at.desc())
             .limit(max(top_k * 3, 25))
@@ -184,14 +185,29 @@ class StructuredMemory(BaseMemory):
 
         ranked: list[tuple[int, int, float, datetime, RetrievedMemory]] = []
         for memory, fact in rows:
-            fact_blob = f"{fact.subject} {fact.predicate} {fact.object_value}".lower()
+            if fact is not None:
+                fact_blob = f"{fact.subject} {fact.predicate} {fact.object_value}".lower()
+                is_explicit_attr = 1 if fact.predicate.lower() != "states" else 0
+                conf_val = float(fact.confidence) if fact.confidence is not None else 1.0
+                fact_meta = {
+                    "subject": fact.subject,
+                    "predicate": fact.predicate,
+                    "object_value": fact.object_value,
+                    "valid_from": fact.valid_from.isoformat() if fact.valid_from else None,
+                    "valid_to": fact.valid_to.isoformat() if fact.valid_to else None,
+                    "as_of": ref_time.isoformat() if has_as_of else None,
+                }
+            else:
+                fact_blob = memory.content.lower()
+                is_explicit_attr = 0
+                conf_val = float(memory.confidence) if memory.confidence is not None else 1.0
+                fact_meta = {"as_of": ref_time.isoformat() if has_as_of else None}
+
             fact_tokens = set(_TOKEN_RE.findall(fact_blob))
             overlap = sum(1 for w in query_words if w in fact_tokens or w in fact_blob)
             if query_words and overlap == 0:
                 continue
 
-            is_explicit_attr = 1 if fact.predicate.lower() != "states" else 0
-            conf_val = float(fact.confidence) if fact.confidence is not None else 1.0
             score = round(overlap / max(1, len(query_words)), 4) if query_words else 1.0
 
             ranked.append((
@@ -207,14 +223,7 @@ class StructuredMemory(BaseMemory):
                     confidence=conf_val,
                     source_message_id=memory.source_message_id,
                     created_at=memory.created_at,
-                    metadata={
-                        "subject": fact.subject,
-                        "predicate": fact.predicate,
-                        "object_value": fact.object_value,
-                        "valid_from": fact.valid_from.isoformat() if fact.valid_from else None,
-                        "valid_to": fact.valid_to.isoformat() if fact.valid_to else None,
-                        "as_of": ref_time.isoformat() if has_as_of else None,
-                    },
+                    metadata=fact_meta,
                 ),
             ))
 
