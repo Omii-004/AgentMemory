@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_current_user, get_project_for_user
@@ -428,7 +428,14 @@ async def get_failure_analysis(
         )
         .join(RunArchitecture, TaskResult.run_architecture_id == RunArchitecture.id)
         .join(BenchmarkTask, TaskResult.task_id == BenchmarkTask.id)
-        .where(TaskResult.run_id == run.id, TaskResult.is_correct.is_(False))
+                .where(
+            TaskResult.run_id == run.id,
+            or_(
+                TaskResult.is_correct.is_(False),
+                TaskResult.is_correct.is_(None),
+                TaskResult.task_status != "success",
+            ),
+        )
         .order_by(TaskResult.created_at.asc())
     )
     res = await db.execute(stmt)
@@ -439,11 +446,13 @@ async def get_failure_analysis(
             "task_id": str(tr.task_id),
             "task_key": task_key,
             "category": category,
-            "failure_classification": tr.evaluation_details.get("failure_classification", "Unknown"),
+            "failure_classification": (tr.evaluation_details or {}).get(
+                "failure_classification", "Unknown"
+            ),
             "expected_answer": tr.expected_answer_snapshot,
             "generated_answer": tr.generated_answer,
             "retrieved_memory_ids": tr.retrieved_memory_ids or [],
-            "evaluation_details": tr.evaluation_details,
+            "evaluation_details": tr.evaluation_details or {},
         }
         for arch_type, tr, task_key, category in res.all()
     ]
