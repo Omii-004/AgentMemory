@@ -48,10 +48,11 @@ class MessageCreate(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
     id: uuid.UUID
     session_id: uuid.UUID
     sequence_number: int
     role: str
     content: str
+    metadata: dict[str, Any] = Field(default_factory=dict, validation_alias="metadata_")
     created_at: datetime
