@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -12,6 +13,7 @@ from app.database.models.memory import (
     Memory,
     MemoryEmbedding,
     MemoryEvent,
+    MemoryFact,
     MemoryNamespace,
     MemoryRelation,
 )
@@ -95,7 +97,7 @@ class MemoryConsolidator:
             )
             self.db.add(consolidated_mem)
 
-            # 5. Generate new vector embedding if architecture uses vectors
+            # 5. Generate derived representations based on architecture
             if ns.architecture_type in ("vector", "hybrid"):
                 emb_service = get_embedding_service()
                 vec = await emb_service.aembed_text(summary_text)
@@ -105,6 +107,19 @@ class MemoryConsolidator:
                         embedding=vec,
                         model_name=emb_service.model_name,
                         dimension=emb_service.dimension,
+                    )
+                )
+
+            if ns.architecture_type in ("structured", "hybrid"):
+                self.db.add(
+                    MemoryFact(
+                        memory_id=consolidated_id,
+                        subject="Consolidated",
+                        predicate="summary",
+                        object_value=summary_text,
+                        object_type="string",
+                        valid_from=datetime.now(UTC),
+                        confidence=Decimal("1.0"),
                     )
                 )
 
