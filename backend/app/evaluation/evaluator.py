@@ -57,14 +57,23 @@ class GroundTruthEvaluator:
         if method == "contains_all" or category == "multi_hop":
             norm_gen = cls.normalize_text(generated_text)
             required_terms = expected_outcome.get("required_terms", accepted_answers)
-            missing = [t for t in required_terms if cls.normalize_text(str(t)) not in norm_gen]
+            missing = [
+                t for t in required_terms
+                if not (
+                    cls.normalize_text(str(t))
+                    and re.search(rf"\b{re.escape(cls.normalize_text(str(t)))}\b", norm_gen)
+                )
+            ]
             is_correct = len(missing) == 0
             return is_correct, {"method": "contains_all", "missing_terms": missing}
 
-        # Default: Normalized substring / match
+        # Default: Normalized token / word-boundary match
         norm_gen = cls.normalize_text(generated_text)
         norm_accepted = [cls.normalize_text(a) for a in accepted_answers]
-        is_correct = any(ans in norm_gen or norm_gen == ans for ans in norm_accepted if ans)
+        is_correct = any(
+            bool(ans and re.search(rf"\b{re.escape(ans)}\b", norm_gen))
+            for ans in norm_accepted
+        )
 
         return is_correct, {
             "method": "normalized",
