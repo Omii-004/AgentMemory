@@ -22,8 +22,12 @@ export function PublicOnlyRoute() {
   }
 
   if (status === 'authenticated' && user) {
-    const state = location.state as { from?: { pathname?: string } } | null;
-    const redirectTo = state?.from?.pathname || '/dashboard';
+    const state = location.state as {
+      from?: { pathname?: string; search?: string; hash?: string };
+    } | null;
+    const redirectTo = state?.from?.pathname
+      ? `${state.from.pathname}${state.from.search ?? ''}${state.from.hash ?? ''}`
+      : '/dashboard';
     return <Navigate to={redirectTo} replace />;
   }
 
