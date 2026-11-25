@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, LogOut, Menu } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { listProjects } from '@/services/project.service';
+import { getProject, listProjects } from '@/services/project.service';
 import { useAuthStore } from '@/stores/auth.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
 
@@ -30,6 +30,23 @@ export function Topbar() {
   });
 
   const projects = useMemo(() => projectsPage?.data ?? [], [projectsPage]);
+  const hasMorePages = (projectsPage?.pagination.total_pages ?? 1) > 1;
+  const inFirstPage = Boolean(activeProjectId && projects.some((p) => p.id === activeProjectId));
+
+  // If account has >50 projects and activeProjectId isn't in page 1, verify it directly
+  const extraProjectQuery = useQuery({
+    queryKey: ['project', activeProjectId],
+    queryFn: () => getProject(activeProjectId!),
+    enabled: Boolean(user && isSuccess && activeProjectId && !inFirstPage && hasMorePages),
+    retry: false,
+  });
+
+  const selectorProjects = useMemo(() => {
+    if (extraProjectQuery.data && !projects.some((p) => p.id === extraProjectQuery.data.id)) {
+      return [extraProjectQuery.data, ...projects];
+    }
+    return projects;
+  }, [projects, extraProjectQuery.data]);
 
   useEffect(() => {
     if (!isSuccess) return;
@@ -37,13 +54,24 @@ export function Topbar() {
       if (activeProjectId !== null) setActiveProjectId(null);
       return;
     }
-    const exists = projects.some((p) => p.id === activeProjectId);
-    if (!activeProjectId || !exists) {
+    if (!activeProjectId) {
+      setActiveProjectId(projects[0].id);
+      return;
+    }
+    if (!inFirstPage && (!hasMorePages || extraProjectQuery.isError)) {
       setActiveProjectId(projects[0].id);
     }
-  }, [isSuccess, projects, activeProjectId, setActiveProjectId]);
+  }, [
+    isSuccess,
+    projects,
+    activeProjectId,
+    inFirstPage,
+    hasMorePages,
+    extraProjectQuery.isError,
+    setActiveProjectId,
+  ]);
 
-  const activeProject = projects.find((p) => p.id === activeProjectId) ?? null;
+  const activeProject = selectorProjects.find((p) => p.id === activeProjectId) ?? null;
   const firstSegment = location.pathname.split('/').filter(Boolean)[0] ?? 'dashboard';
   const currentSection = ROUTE_LABELS[firstSegment] ?? 'Workspace';
 
@@ -52,6 +80,13 @@ export function Topbar() {
     queryClient.clear();
     setActiveProjectId(null);
     navigate('/login', { replace: true });
+  };
+
+  const handleProjectChange = (nextId: string | null) => {
+    setActiveProjectId(nextId);
+    if (nextId && /^\/projects\/[^/]+/.test(location.pathname)) {
+      navigate(`/projects/${nextId}${location.search}`);
+    }
   };
 
   return (
@@ -74,14 +109,14 @@ export function Topbar() {
           <select
             id="active-project-select"
             value={activeProject?.id ?? ''}
-            onChange={(e) => setActiveProjectId(e.target.value || null)}
-            disabled={projects.length === 0}
+            onChange={(e) => handleProjectChange(e.target.value || null)}
+            disabled={selectorProjects.length === 0}
             className="h-9 max-w-[200px] sm:max-w-[240px] rounded-md border border-border bg-canvas px-2.5 text-sm font-medium text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
-            {projects.length === 0 ? (
+            {selectorProjects.length === 0 ? (
               <option value="">No projects yet</option>
             ) : (
-              projects.map((project) => (
+              selectorProjects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name}
                 </option>
