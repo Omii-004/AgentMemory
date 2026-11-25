@@ -103,12 +103,24 @@ export function AnalyticsPage() {
   });
   const experiments = experimentsQuery.data ?? [];
 
-  // Derive experiment selection
+  // Derive experiment & run selection (supports both runId and run_id deep links)
   const rawExpId = searchParams.get('experimentId');
+  const rawRunId = searchParams.get('runId') ?? searchParams.get('run_id');
+
+  // If deep-linked by runId without experimentId, resolve its parent experiment
+  const targetRunLookupQuery = useQuery({
+    queryKey: ['run-lookup', rawRunId],
+    queryFn: () => getRun(rawRunId!),
+    enabled: Boolean(rawRunId && !rawExpId),
+  });
+
+  const resolvedExpIdFromRun = targetRunLookupQuery.data?.experiment_id ?? null;
   const selectedExpId =
     rawExpId && experiments.some((e) => e.id === rawExpId)
       ? rawExpId
-      : experiments[0]?.id ?? null;
+      : resolvedExpIdFromRun && experiments.some((e) => e.id === resolvedExpIdFromRun)
+        ? resolvedExpIdFromRun
+        : (experiments[0]?.id ?? null);
 
   // 2. Fetch runs for selected experiment
   const runsQuery = useQuery({
@@ -119,11 +131,10 @@ export function AnalyticsPage() {
   const runs = runsQuery.data ?? [];
 
   // Derive active run selection
-  const rawRunId = searchParams.get('runId');
   const activeRunId =
     rawRunId && runs.some((r) => r.id === rawRunId)
       ? rawRunId
-      : runs[0]?.id ?? null;
+      : (runs[0]?.id ?? null);
 
   // 3. Fetch details for active run
   const runQuery = useQuery({
@@ -164,6 +175,7 @@ export function AnalyticsPage() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('runId', newRunId);
+      next.delete('run_id');
       return next;
     });
   };
@@ -173,6 +185,7 @@ export function AnalyticsPage() {
       const next = new URLSearchParams(prev);
       next.set('experimentId', newExpId);
       next.delete('runId');
+      next.delete('run_id');
       return next;
     });
   };
@@ -877,7 +890,7 @@ export function AnalyticsPage() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         {!statistics?.descriptive_ci_95 ||
-                        Object.keys(statistics.descriptive_ci_95).length === 0 ? (
+                          Object.keys(statistics.descriptive_ci_95).length === 0 ? (
                           <tr>
                             <td
                               colSpan={4}
@@ -931,7 +944,7 @@ export function AnalyticsPage() {
                       </thead>
                       <tbody className="divide-y divide-border">
                         {!statistics?.pairwise_comparisons ||
-                        statistics.pairwise_comparisons.length === 0 ? (
+                          statistics.pairwise_comparisons.length === 0 ? (
                           <tr>
                             <td
                               colSpan={7}
