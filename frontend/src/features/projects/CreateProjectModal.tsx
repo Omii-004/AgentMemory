@@ -58,6 +58,13 @@ export function CreateProjectModal({ open, onClose, onCreated }: CreateProjectMo
     },
   });
 
+  const handleClose = () => {
+    if (mutation.isPending) return;
+    reset();
+    setServerError(null);
+    onClose();
+  };
+
   const onSubmit = (values: CreateProjectForm) => {
     setServerError(null);
     mutation.mutate({
@@ -69,7 +76,7 @@ export function CreateProjectModal({ open, onClose, onCreated }: CreateProjectMo
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={handleClose}
       title="Create Research Project"
       description="Projects isolate memory namespaces, datasets, experiments, and reports."
     >
@@ -114,7 +121,7 @@ export function CreateProjectModal({ open, onClose, onCreated }: CreateProjectMo
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={handleClose} disabled={mutation.isPending}>
             Cancel
           </Button>
           <Button type="submit" isLoading={mutation.isPending}>
