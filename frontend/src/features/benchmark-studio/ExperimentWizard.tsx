@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { EmptyState, LoadingState } from '@/components/common/StateViews';
+import { parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
 import { listDatasets } from '@/services/dataset.service';
 import { createExperiment, startRun } from '@/services/experiment.service';
@@ -81,10 +82,10 @@ export function ExperimentWizard({
     mutationFn: async () => {
       const archConfigs: Record<string, Record<string, unknown>> = {};
       if (selectedArchs.includes('history')) {
-        archConfigs.history = { window_size: Number(historyWindow) || 5 };
+        archConfigs.history = { window_size: parseNumberOrDefault(historyWindow, 5) };
       }
       if (selectedArchs.includes('vector')) {
-        archConfigs.vector = { similarity_threshold: Number(vectorThreshold) || 0.0 };
+        archConfigs.vector = { similarity_threshold: parseNumberOrDefault(vectorThreshold, 0.0) };
       }
 
       const payload: ExperimentCreate = {
@@ -94,15 +95,15 @@ export function ExperimentWizard({
         architectures: selectedArchs,
         llm_provider: llmProvider,
         llm_model: llmModel.trim() || null,
-        num_trials: Number(numTrials) || 1,
-        temperature: Number(temperature) || 0.0,
-        max_tokens: Number(maxTokens) || 512,
+        num_trials: parseNumberOrDefault(numTrials, 1),
+        temperature: parseNumberOrDefault(temperature, 0.0),
+        max_tokens: parseNumberOrDefault(maxTokens, 512),
         architecture_configs: archConfigs,
       };
 
       const exp = await createExperiment(projectId, payload);
       void queryClient.invalidateQueries({ queryKey: ['experiments', projectId] });
-      const run = await startRun(exp.id, { random_seed: Number(seed) || 42 });
+      const run = await startRun(exp.id, { random_seed: parseNumberOrDefault(seed, 42) });
       return { exp, run };
     },
     onSuccess: ({ exp, run }) => {
@@ -133,7 +134,7 @@ export function ExperimentWizard({
 
   const hasDatasetTasks = (selectedDataset?.task_count ?? 0) > 0;
   const estimatedTasks =
-    selectedArchs.length * (Number(numTrials) || 1) * (selectedDataset?.task_count ?? 0);
+    selectedArchs.length * parseNumberOrDefault(numTrials, 1) * (selectedDataset?.task_count ?? 0);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
