@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, LoadingState } from '@/components/common/StateViews';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
 import {
   createDataset,
@@ -146,11 +146,10 @@ export function DatasetManager({ projectId, onSelectDatasetForExperiment }: Data
                     setSelectedDatasetId(ds.id);
                     setValidationResult(null);
                   }}
-                  className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
-                      : 'border-border bg-canvas/40 hover:bg-canvas'
-                  }`}
+                  className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${isSelected
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                    : 'border-border bg-canvas/40 hover:bg-canvas'
+                    }`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <div className="flex items-center gap-1.5">
@@ -514,9 +513,9 @@ function SyntheticGeneratorModal({
   const mutation = useMutation({
     mutationFn: () =>
       generateSyntheticTasks(dataset.id, {
-        tasks_per_category: Number(tasksPerCat) || 2,
-        distractor_count: Number(distractorCount) || 6,
-        seed: Number(seed) || 42,
+        tasks_per_category: parseNumberOrDefault(tasksPerCat, 2),
+        distractor_count: parseNumberOrDefault(distractorCount, 6),
+        seed: parseNumberOrDefault(seed, 42),
       }),
     onSuccess: (res) => {
       pushToast({
@@ -540,7 +539,7 @@ function SyntheticGeneratorModal({
     mutation.mutate();
   };
 
-  const totalTasks = (Number(tasksPerCat) || 2) * 6;
+  const totalTasks = parseNumberOrDefault(tasksPerCat, 2) * 6;
 
   return (
     <Modal
