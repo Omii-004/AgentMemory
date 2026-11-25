@@ -18,19 +18,26 @@ export function ProjectsPage() {
   const queryClient = useQueryClient();
   const { activeProjectId, setActiveProjectId, pushToast } = useWorkspaceStore();
 
+  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
   const [deleteTarget, setDeleteTarget] = useState<ProjectResponse | null>(null);
 
   const projectsQuery = useQuery({
-    queryKey: ['projects', 'list'],
-    queryFn: () => listProjects(1, 50),
+    queryKey: page === 1 ? ['projects', 'list'] : ['projects', 'list', page],
+    queryFn: () => listProjects(page, 50),
   });
+
+  const pagination = projectsQuery.data?.pagination;
+  const allProjects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data]);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteProject(id),
     onSuccess: (_data, deletedId) => {
+      if (allProjects.length === 1 && page > 1) {
+        setPage((p) => p - 1);
+      }
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
       if (activeProjectId === deletedId) {
         setActiveProjectId(null);
@@ -50,8 +57,6 @@ export function ProjectsPage() {
       });
     },
   });
-
-  const allProjects = useMemo(() => projectsQuery.data?.data ?? [], [projectsQuery.data]);
   const filteredProjects = useMemo(() => {
     const q = search.trim().toLowerCase();
     return allProjects.filter((project) => {
@@ -227,6 +232,32 @@ export function ProjectsPage() {
               </tbody>
             </table>
           </div>
+
+          {pagination && pagination.total_pages > 1 && (
+            <div className="px-4 py-3 border-t border-border bg-canvas/40 flex items-center justify-between text-xs text-text-secondary">
+              <span className="font-mono">
+                Page {pagination.page} of {pagination.total_pages} ({pagination.total_items} total)
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={page >= pagination.total_pages}
+                  onClick={() => setPage((p) => Math.min(pagination.total_pages, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
