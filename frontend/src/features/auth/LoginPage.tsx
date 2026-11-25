@@ -37,8 +37,13 @@ export function LoginPage() {
     try {
       await login(values);
       queryClient.clear();
-      const state = location.state as { from?: { pathname?: string } } | null;
-      navigate(state?.from?.pathname || '/dashboard', { replace: true });
+      const state = location.state as {
+        from?: { pathname?: string; search?: string; hash?: string };
+      } | null;
+      const redirectTo = state?.from?.pathname
+        ? `${state.from.pathname}${state.from.search ?? ''}${state.from.hash ?? ''}`
+        : '/dashboard';
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       if (err instanceof ApiClientError) {
         setServerError(err.message);
