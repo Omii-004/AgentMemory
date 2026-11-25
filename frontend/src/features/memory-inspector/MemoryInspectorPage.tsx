@@ -13,7 +13,7 @@ import {
   Search,
   Trash2,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, LoadingState } from '@/components/common/StateViews';
@@ -42,11 +42,14 @@ type InspectorTab = 'content' | 'facts' | 'versions' | 'lifecycle' | 'json';
 
 export function MemoryInspectorPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeProjectId, pushToast } = useWorkspaceStore();
+
+  const urlNamespaceId = searchParams.get('namespaceId');
 
   // Filters State
   const [includeRunNamespaces, setIncludeRunNamespaces] = useState(false);
-  const [selectedNamespaceId, setSelectedNamespaceId] = useState<string | null>(null);
+  const [selectedNamespaceId, setSelectedNamespaceId] = useState<string | null>(urlNamespaceId);
   const [statusFilter, setStatusFilter] = useState('active');
   const [typeFilter, setTypeFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,12 +68,13 @@ export function MemoryInspectorPage() {
   });
 
   const namespaces = useMemo(() => namespacesQuery.data ?? [], [namespacesQuery.data]);
+  const effectiveSelectedNs = selectedNamespaceId ?? urlNamespaceId;
   const activeNamespaceId = useMemo(
     () =>
-      namespaces.some((n) => n.id === selectedNamespaceId)
-        ? selectedNamespaceId
+      namespaces.some((n) => n.id === effectiveSelectedNs)
+        ? effectiveSelectedNs
         : (namespaces[0]?.id ?? null),
-    [namespaces, selectedNamespaceId],
+    [namespaces, effectiveSelectedNs],
   );
 
   const activeNamespace = useMemo(
@@ -218,7 +222,11 @@ export function MemoryInspectorPage() {
               <select
                 id="ns-selector"
                 value={activeNamespaceId ?? ''}
-                onChange={(e) => setSelectedNamespaceId(e.target.value)}
+                onChange={(e) => {
+                  const nextId = e.target.value;
+                  setSelectedNamespaceId(nextId);
+                  setSearchParams(nextId ? { namespaceId: nextId } : {});
+                }}
                 className="w-full h-9 px-2.5 rounded-md border border-border bg-surface text-xs font-mono"
               >
                 {namespaces.length === 0 ? (
