@@ -88,9 +88,15 @@ export function MemoryLabPage() {
   const { activeProjectId, pushToast } = useWorkspaceStore();
 
   const [createNsOpen, setCreateNsOpen] = useState(false);
+  const [createDefaultArch, setCreateDefaultArch] = useState<ArchitectureType>('hybrid');
   const [selectedNamespaceId, setSelectedNamespaceId] = useState<string | null>(null);
   const [editingNamespace, setEditingNamespace] = useState<NamespaceResponse | null>(null);
   const [workbenchTab, setWorkbenchTab] = useState<'store' | 'retrieve' | 'consolidate'>('store');
+
+  const openCreateNamespace = (arch: ArchitectureType = 'hybrid') => {
+    setCreateDefaultArch(arch);
+    setCreateNsOpen(true);
+  };
 
   // Queries
   const archCatalogQuery = useQuery({
@@ -121,12 +127,36 @@ export function MemoryLabPage() {
     return counts;
   }, [namespaces]);
 
-  // Workbench operation states
-  const [lastStoreResult, setLastStoreResult] = useState<MemoryOperationResult | null>(null);
-  const [lastRetrieveResult, setLastRetrieveResult] = useState<MemoryOperationResult | null>(null);
-  const [lastConsolidateResult, setLastConsolidateResult] = useState<ConsolidationResult | null>(
-    null,
-  );
+  // Workbench operation states (scoped per namespace so switching stores/projects never leaks stale output)
+  const [storeResultState, setStoreResultState] = useState<{
+    namespaceId: string;
+    result: MemoryOperationResult;
+  } | null>(null);
+  const [retrieveResultState, setRetrieveResultState] = useState<{
+    namespaceId: string;
+    result: MemoryOperationResult;
+  } | null>(null);
+  const [consolidateResultState, setConsolidateResultState] = useState<{
+    namespaceId: string;
+    result: ConsolidationResult;
+  } | null>(null);
+
+  const lastStoreResult =
+    storeResultState && activeNamespace && storeResultState.namespaceId === activeNamespace.id
+      ? storeResultState.result
+      : null;
+  const lastRetrieveResult =
+    retrieveResultState &&
+      activeNamespace &&
+      retrieveResultState.namespaceId === activeNamespace.id
+      ? retrieveResultState.result
+      : null;
+  const lastConsolidateResult =
+    consolidateResultState &&
+      activeNamespace &&
+      consolidateResultState.namespaceId === activeNamespace.id
+      ? consolidateResultState.result
+      : null;
 
   // Store form state
   const [storeContent, setStoreContent] = useState('');
@@ -148,8 +178,8 @@ export function MemoryLabPage() {
   // Mutations
   const storeMutation = useMutation({
     mutationFn: (payload: MemoryStoreRequest) => storeMemory(activeProjectId!, payload),
-    onSuccess: (res) => {
-      setLastStoreResult(res);
+    onSuccess: (res, variables) => {
+      setStoreResultState({ namespaceId: variables.namespace_id, result: res });
       setStoreContent('');
       setStoreSubject('');
       setStorePredicate('');
@@ -172,8 +202,8 @@ export function MemoryLabPage() {
 
   const retrieveMutation = useMutation({
     mutationFn: (payload: MemoryRetrieveRequest) => retrieveMemories(activeProjectId!, payload),
-    onSuccess: (res) => {
-      setLastRetrieveResult(res);
+    onSuccess: (res, variables) => {
+      setRetrieveResultState({ namespaceId: variables.namespace_id, result: res });
       pushToast({
         title: 'Retrieval completed',
         description: `Returned ${res.retrieved_memories.length} candidate(s) in ${res.latency_ms} ms.`,
@@ -190,11 +220,24 @@ export function MemoryLabPage() {
   });
 
   const consolidateMutation = useMutation({
-    mutationFn: (payload: { min_memories: number }) =>
-      consolidateNamespace(activeNamespace!.id, payload),
-    onSuccess: (res) => {
-      setLastConsolidateResult(res);
+    mutationFn: ({
+      namespaceId,
+      min_memories,
+    }: {
+      namespaceId: string;
+      min_memories: number;
+    }) => consolidateNamespace(namespaceId, { min_memories }),
+    onSuccess: (res, variables) => {
+      setConsolidateResultState({ namespaceId: variables.namespaceId, result: res });
       void queryClient.invalidateQueries({ queryKey: ['memories', activeProjectId] });
+      if (res.status === 'skipped') {
+        pushToast({
+          title: 'Consolidation skipped',
+          description: res.summary_content || 'Insufficient active memories to consolidate.',
+          variant: 'info',
+        });
+        return;
+      }
       pushToast({
         title: 'Consolidation finished',
         description: `${res.source_count} memories consolidated into summary.`,
@@ -231,11 +274,25 @@ export function MemoryLabPage() {
     e.preventDefault();
     if (!activeNamespace || !retrieveQuery.trim()) return;
 
+    let asOfIso: string | null = null;
+    if (retrieveAsOf) {
+      const parsedDate = new Date(retrieveAsOf);
+      if (Number.isNaN(parsedDate.getTime())) {
+        pushToast({
+          title: 'Invalid date',
+          description: 'Enter a valid Point-in-Time date/time.',
+          variant: 'error',
+        });
+        return;
+      }
+      asOfIso = parsedDate.toISOString();
+    }
+
     const payload: MemoryRetrieveRequest = {
       namespace_id: activeNamespace.id,
       query: retrieveQuery.trim(),
       top_k: parseNumberOrDefault(retrieveTopK, 5),
-      as_of: retrieveAsOf ? new Date(retrieveAsOf).toISOString() : null,
+      as_of: asOfIso,
     };
     retrieveMutation.mutate(payload);
   };
@@ -243,7 +300,10 @@ export function MemoryLabPage() {
   const handleConsolidateSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!activeNamespace) return;
-    consolidateMutation.mutate({ min_memories: parseNumberOrDefault(consolidateMin, 2) });
+    consolidateMutation.mutate({
+      namespaceId: activeNamespace.id,
+      min_memories: parseNumberOrDefault(consolidateMin, 2),
+    });
   };
 
   return (
@@ -335,7 +395,7 @@ export function MemoryLabPage() {
                     <button
                       type="button"
                       disabled={!activeProjectId}
-                      onClick={() => setCreateNsOpen(true)}
+                      onClick={() => openCreateNamespace(arch)}
                       className="text-primary hover:underline font-medium cursor-pointer disabled:opacity-40"
                     >
                       + Add store
@@ -643,7 +703,7 @@ export function MemoryLabPage() {
 
                       <div className="mt-4 pt-3 border-t border-border flex justify-end">
                         <Link
-                          to="/memory-inspector"
+                          to={`/memory-inspector?namespaceId=${activeNamespace.id}`}
                           className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
                         >
                           Open in Memory Inspector
@@ -762,7 +822,7 @@ export function MemoryLabPage() {
 
                       <div className="mt-4 pt-3 border-t border-border flex justify-end">
                         <Link
-                          to="/memory-inspector"
+                          to={`/memory-inspector?namespaceId=${activeNamespace.id}`}
                           className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
                         >
                           Inspect All in Memory Inspector
@@ -867,7 +927,9 @@ export function MemoryLabPage() {
       {/* MODAL 1: Create Namespace Modal */}
       {activeProjectId && (
         <CreateNamespaceModal
+          key={`${createNsOpen}:${createDefaultArch}`}
           open={createNsOpen}
+          initialArchitecture={createDefaultArch}
           projectId={activeProjectId}
           onClose={() => setCreateNsOpen(false)}
           onCreated={(ns) => {
@@ -898,17 +960,24 @@ export function MemoryLabPage() {
 // -----------------------------------------------------------------------------
 interface CreateNamespaceModalProps {
   open: boolean;
+  initialArchitecture?: ArchitectureType;
   projectId: string;
   onClose: () => void;
   onCreated: (ns: NamespaceResponse) => void;
 }
 
-function CreateNamespaceModal({ open, projectId, onClose, onCreated }: CreateNamespaceModalProps) {
+function CreateNamespaceModal({
+  open,
+  initialArchitecture = 'hybrid',
+  projectId,
+  onClose,
+  onCreated,
+}: CreateNamespaceModalProps) {
   const queryClient = useQueryClient();
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
   const [name, setName] = useState('');
-  const [arch, setArch] = useState<ArchitectureType>('hybrid');
+  const [arch, setArch] = useState<ArchitectureType>(initialArchitecture);
   const [windowSize, setWindowSize] = useState('5');
   const [similarityThreshold, setSimilarityThreshold] = useState('0.0');
 
@@ -1084,9 +1153,17 @@ function EditNamespaceConfigModal({
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setJsonError(null);
+    if (!name.trim()) {
+      setJsonError('Store name cannot be blank.');
+      return;
+    }
     try {
-      const parsed = JSON.parse(configJson) as Record<string, unknown>;
-      updateMutation.mutate(parsed);
+      const parsed: unknown = JSON.parse(configJson);
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setJsonError('Configuration must be a JSON object (e.g. {}).');
+        return;
+      }
+      updateMutation.mutate(parsed as Record<string, unknown>);
     } catch {
       setJsonError('Invalid JSON format. Check configuration syntax.');
     }
