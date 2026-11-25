@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -18,6 +19,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const login = useAuthStore((state) => state.login);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -34,6 +36,7 @@ export function LoginPage() {
     setServerError(null);
     try {
       await login(values);
+      queryClient.clear();
       const state = location.state as { from?: { pathname?: string } } | null;
       navigate(state?.from?.pathname || '/dashboard', { replace: true });
     } catch (err) {
