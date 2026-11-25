@@ -244,11 +244,12 @@ export function ReportsPage() {
         </div>
       )}
 
-            {/* Generate Report Modal */}
+      {/* Generate Report Modal */}
       {createOpen && activeProjectId && (
         <GenerateReportModal
           open={createOpen}
           experiments={experiments}
+          experimentsLoading={experimentsQuery.isLoading}
           onClose={() => setCreateOpen(false)}
           onGenerated={() => {
             queryClient.invalidateQueries({ queryKey: ['project-reports', activeProjectId] });
@@ -276,6 +277,7 @@ export function ReportsPage() {
 interface GenerateReportModalProps {
   open: boolean;
   experiments: Array<{ id: string; name: string }>;
+  experimentsLoading?: boolean;
   onClose: () => void;
   onGenerated: () => void;
 }
@@ -283,22 +285,27 @@ interface GenerateReportModalProps {
 function GenerateReportModal({
   open,
   experiments,
+  experimentsLoading = false,
   onClose,
   onGenerated,
 }: GenerateReportModalProps) {
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
-  const [selectedExpId, setSelectedExpId] = useState<string>(
-    experiments[0]?.id ?? '',
-  );
+  const [selectedExpId, setSelectedExpId] = useState<string>('');
   const [selectedRunId, setSelectedRunId] = useState<string>('');
   const [reportType, setReportType] = useState<'json' | 'csv'>('json');
 
+  // Derive effective experiment selection during render (handles async load after modal mounts)
+  const effectiveExpId =
+    selectedExpId && experiments.some((e) => e.id === selectedExpId)
+      ? selectedExpId
+      : (experiments[0]?.id ?? '');
+
   // Fetch runs for the selected experiment
   const runsQuery = useQuery({
-    queryKey: ['experiment-runs-modal', selectedExpId],
-    queryFn: () => listExperimentRuns(selectedExpId),
-    enabled: !!selectedExpId,
+    queryKey: ['experiment-runs-modal', effectiveExpId],
+    queryFn: () => listExperimentRuns(effectiveExpId),
+    enabled: !!effectiveExpId,
   });
   const runs = runsQuery.data ?? [];
 
@@ -342,14 +349,17 @@ function GenerateReportModal({
             Select Experiment
           </label>
           <select
-            value={selectedExpId}
+            value={effectiveExpId}
             onChange={(e) => {
               setSelectedExpId(e.target.value);
               setSelectedRunId('');
             }}
-            className="w-full h-10 px-3 text-sm bg-canvas border border-border rounded-md text-text-primary focus:outline-none focus:border-primary"
+            disabled={experimentsLoading || experiments.length === 0}
+            className="w-full h-10 px-3 text-sm bg-canvas border border-border rounded-md text-text-primary focus:outline-none focus:border-primary disabled:opacity-50"
           >
-            {experiments.length === 0 ? (
+            {experimentsLoading ? (
+              <option value="">Loading experiments...</option>
+            ) : experiments.length === 0 ? (
               <option value="">No experiments found</option>
             ) : (
               experiments.map((exp) => (
@@ -369,10 +379,12 @@ function GenerateReportModal({
           <select
             value={effectiveRunId}
             onChange={(e) => setSelectedRunId(e.target.value)}
-            disabled={runs.length === 0}
+            disabled={runsQuery.isLoading || runs.length === 0}
             className="w-full h-10 px-3 text-sm bg-canvas border border-border rounded-md text-text-primary focus:outline-none focus:border-primary disabled:opacity-50"
           >
-            {runs.length === 0 ? (
+            {runsQuery.isLoading ? (
+              <option value="">Loading runs...</option>
+            ) : runs.length === 0 ? (
               <option value="">No runs recorded for this experiment</option>
             ) : (
               runs.map((r) => (
@@ -393,11 +405,10 @@ function GenerateReportModal({
             <button
               type="button"
               onClick={() => setReportType('json')}
-              className={`p-3.5 border rounded-lg text-left transition-all cursor-pointer ${
-                reportType === 'json'
-                  ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-                  : 'border-border bg-canvas hover:border-primary/50'
-              }`}
+              className={`p-3.5 border rounded-lg text-left transition-all cursor-pointer ${reportType === 'json'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
+                : 'border-border bg-canvas hover:border-primary/50'
+                }`}
             >
               <div className="flex items-center gap-2">
                 <FileCode className="h-4 w-4 text-primary" />
@@ -414,11 +425,10 @@ function GenerateReportModal({
             <button
               type="button"
               onClick={() => setReportType('csv')}
-              className={`p-3.5 border rounded-lg text-left transition-all cursor-pointer ${
-                reportType === 'csv'
-                  ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30'
-                  : 'border-border bg-canvas hover:border-emerald-500/50'
-              }`}
+              className={`p-3.5 border rounded-lg text-left transition-all cursor-pointer ${reportType === 'csv'
+                ? 'border-emerald-500 bg-emerald-500/5 ring-1 ring-emerald-500/30'
+                : 'border-border bg-canvas hover:border-emerald-500/50'
+                }`}
             >
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
