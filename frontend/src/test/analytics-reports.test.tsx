@@ -57,54 +57,54 @@ describe('Experiment Analytics & Reports Workflows', () => {
     status: 'completed',
     architectures: {
       history: {
-        task_success_rate: 0.5,
+        task_success_rate: 50.0,
         precision_at_k: 0.45,
         recall_at_k: 0.4,
         mrr: 0.48,
         avg_total_latency_ms: 120.0,
         total_tokens: 1200,
-        memory_utility: 0.42,
-        categories: { fact_retrieval: 0.6, temporal_reasoning: 0.4 },
+        memory_utility: 42.0,
+        categories: { fact_retrieval: 60.0, temporal_reasoning: 40.0 },
       },
       vector: {
-        task_success_rate: 0.75,
+        task_success_rate: 75.0,
         precision_at_k: 0.7,
         recall_at_k: 0.68,
         mrr: 0.72,
         avg_total_latency_ms: 110.0,
         total_tokens: 1100,
-        memory_utility: 0.65,
-        categories: { fact_retrieval: 0.85, temporal_reasoning: 0.6 },
+        memory_utility: 65.0,
+        categories: { fact_retrieval: 85.0, temporal_reasoning: 60.0 },
       },
       structured: {
-        task_success_rate: 0.8,
+        task_success_rate: 80.0,
         precision_at_k: 0.85,
         recall_at_k: 0.78,
         mrr: 0.81,
         avg_total_latency_ms: 105.0,
         total_tokens: 980,
-        memory_utility: 0.82,
-        categories: { fact_retrieval: 0.9, temporal_reasoning: 0.85 },
+        memory_utility: 82.0,
+        categories: { fact_retrieval: 90.0, temporal_reasoning: 85.0 },
       },
       hybrid: {
-        task_success_rate: 0.92,
+        task_success_rate: 92.0,
         precision_at_k: 0.9,
         recall_at_k: 0.88,
         mrr: 0.89,
         avg_total_latency_ms: 115.0,
         total_tokens: 950,
-        memory_utility: 0.91,
-        categories: { fact_retrieval: 0.95, temporal_reasoning: 0.9 },
+        memory_utility: 91.0,
+        categories: { fact_retrieval: 95.0, temporal_reasoning: 90.0 },
       },
     },
   };
 
   const mockStatistics = {
     descriptive_ci_95: {
-      history: { mean: 0.5, std: 0.12, ci_low: 0.42, ci_high: 0.58 },
-      vector: { mean: 0.75, std: 0.1, ci_low: 0.68, ci_high: 0.82 },
-      structured: { mean: 0.8, std: 0.09, ci_low: 0.74, ci_high: 0.86 },
-      hybrid: { mean: 0.92, std: 0.06, ci_low: 0.87, ci_high: 0.96 },
+      history: { mean: 50.0, std: 12.0, ci_low: 42.0, ci_high: 58.0 },
+      vector: { mean: 75.0, std: 10.0, ci_low: 68.0, ci_high: 82.0 },
+      structured: { mean: 80.0, std: 9.0, ci_low: 74.0, ci_high: 86.0 },
+      hybrid: { mean: 92.0, std: 6.0, ci_low: 87.0, ci_high: 96.0 },
     },
     pairwise_comparisons: [
       {
@@ -187,7 +187,7 @@ describe('Experiment Analytics & Reports Workflows', () => {
       },
     });
 
-        useAuthStore.setState({
+    useAuthStore.setState({
       user: mockUser,
       token: 'valid-test-token',
       status: 'authenticated',
