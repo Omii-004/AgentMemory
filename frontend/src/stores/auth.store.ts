@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getStoredToken, setStoredToken, setUnauthorizedHandler } from '@/services/api-client';
 import { fetchCurrentUser, loginUser, logoutUser, registerUser } from '@/services/auth.service';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import type { UserLoginRequest, UserRegisterRequest, UserResponse } from '@/types/api';
 
 export type AuthStatus = 'idle' | 'checking' | 'authenticated' | 'unauthenticated';
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     const token = getStoredToken();
     if (!token) {
+      useWorkspaceStore.getState().setActiveProjectId(null);
       set({ user: null, token: null, status: 'unauthenticated' });
       return;
     }
@@ -45,6 +47,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user, token, status: 'authenticated' });
       } catch {
         setStoredToken(null);
+        useWorkspaceStore.getState().setActiveProjectId(null);
         set({ user: null, token: null, status: 'unauthenticated' });
       } finally {
         inFlightInit = null;
@@ -72,12 +75,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     inFlightInit = null;
     await logoutUser();
+    useWorkspaceStore.getState().setActiveProjectId(null);
     set({ user: null, token: null, status: 'unauthenticated' });
   },
 
   markUnauthenticated: () => {
     inFlightInit = null;
     setStoredToken(null);
+    useWorkspaceStore.getState().setActiveProjectId(null);
     set({ user: null, token: null, status: 'unauthenticated' });
   },
 }));
