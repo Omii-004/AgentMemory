@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
-import { EmptyState, LoadingState } from '@/components/common/StateViews';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { formatDateTime, parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
 import {
@@ -124,6 +124,16 @@ export function DatasetManager({ projectId, onSelectDatasetForExperiment }: Data
 
         {datasetsQuery.isPending ? (
           <LoadingState label="Loading benchmark datasets..." />
+        ) : datasetsQuery.isError ? (
+          <ErrorState
+            title="Unable to load datasets"
+            message={
+              datasetsQuery.error instanceof ApiClientError
+                ? datasetsQuery.error.message
+                : 'Could not retrieve benchmark datasets.'
+            }
+            onRetry={() => void datasetsQuery.refetch()}
+          />
         ) : datasets.length === 0 ? (
           <EmptyState
             title="No benchmark datasets in this project"
@@ -271,6 +281,18 @@ export function DatasetManager({ projectId, onSelectDatasetForExperiment }: Data
           {/* Tasks Table */}
           {tasksQuery.isPending ? (
             <div className="p-8 text-center text-xs text-text-secondary">Loading tasks...</div>
+          ) : tasksQuery.isError ? (
+            <div className="p-5">
+              <ErrorState
+                title="Unable to load tasks"
+                message={
+                  tasksQuery.error instanceof ApiClientError
+                    ? tasksQuery.error.message
+                    : 'Could not retrieve benchmark tasks for this dataset.'
+                }
+                onRetry={() => void tasksQuery.refetch()}
+              />
+            </div>
           ) : tasks.length === 0 ? (
             <div className="p-12 text-center space-y-3">
               <p className="text-sm text-text-secondary">
