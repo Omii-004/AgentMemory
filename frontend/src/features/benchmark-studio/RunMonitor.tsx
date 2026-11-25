@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
+  AlertCircle,
   CheckCircle2,
   Clock,
   FileText,
@@ -37,6 +38,7 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
   const queryClient = useQueryClient();
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
+  const [selectedExpId, setSelectedExpId] = useState<string | null>(null);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
   // Experiments in Project
@@ -47,9 +49,10 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
   });
 
   const experiments = useMemo(() => experimentsQuery.data ?? [], [experimentsQuery.data]);
-  const activeExperiment = experiments[0] ?? null;
+  const activeExperiment =
+    experiments.find((e) => e.id === selectedExpId) ?? experiments[0] ?? null;
 
-  // Runs for the most recent or active experiment
+  // Runs for the selected experiment
   const runsQuery = useQuery({
     queryKey: ['experiment-runs', activeExperiment?.id],
     queryFn: () => listExperimentRuns(activeExperiment!.id),
@@ -96,13 +99,33 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
 
   const results = useMemo(() => resultsQuery.data ?? [], [resultsQuery.data]);
 
+  // Trigger a final sync of runs, architectures, and results when a live run reaches a terminal state
+  const prevStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    const next = run?.status;
+    prevStatusRef.current = next;
+    if (
+      activeRunId &&
+      (prev === 'running' || prev === 'pending') &&
+      next &&
+      next !== 'running' &&
+      next !== 'pending'
+    ) {
+      void queryClient.invalidateQueries({ queryKey: ['experiment-runs', activeExperiment?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['run-architectures', activeRunId] });
+      void queryClient.invalidateQueries({ queryKey: ['run-results', activeRunId] });
+    }
+  }, [run?.status, activeRunId, activeExperiment?.id, queryClient]);
+
   // Cancel Run Mutation
   const cancelMutation = useMutation({
     mutationFn: () => cancelRun(activeRunId!),
     onSuccess: (updated) => {
       setConfirmCancelOpen(false);
       void queryClient.invalidateQueries({ queryKey: ['run', activeRunId] });
-      void queryClient.invalidateQueries({ queryKey: ['experiment-runs'] });
+      void queryClient.invalidateQueries({ queryKey: ['experiment-runs', activeExperiment?.id] });
+      void queryClient.invalidateQueries({ queryKey: ['run-architectures', activeRunId] });
       pushToast({
         title: 'Run cancelled',
         description: `Run #${updated.run_number} was halted.`,
@@ -118,11 +141,11 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
     },
   });
 
-  if (experimentsQuery.isPending) {
+  if (experimentsQuery.isPending || (Boolean(activeExperiment) && runsQuery.isPending)) {
     return <LoadingState label="Loading benchmark runs..." />;
   }
 
-  if (experiments.length === 0 || runs.length === 0) {
+  if (experiments.length === 0) {
     return (
       <EmptyState
         title="No benchmark runs executed yet"
@@ -148,18 +171,39 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              aria-label="Select experiment"
+              value={activeExperiment?.id ?? ''}
+              onChange={(e) => {
+                setSelectedExpId(e.target.value);
+                onSelectRun('');
+              }}
+              className="h-9 px-3 rounded-md border border-border bg-canvas text-xs font-medium max-w-[220px]"
+            >
+              {experiments.map((exp) => (
+                <option key={exp.id} value={exp.id}>
+                  {exp.name}
+                </option>
+              ))}
+            </select>
+
             <select
               aria-label="Select benchmark run"
               value={activeRunId ?? ''}
               onChange={(e) => onSelectRun(e.target.value)}
-              className="h-9 px-3 rounded-md border border-border bg-canvas text-xs font-mono"
+              disabled={runs.length === 0}
+              className="h-9 px-3 rounded-md border border-border bg-canvas text-xs font-mono disabled:opacity-50"
             >
-              {runs.map((r) => (
-                <option key={r.id} value={r.id}>
-                  Run #{r.run_number} ({r.status})
-                </option>
-              ))}
+              {runs.length === 0 ? (
+                <option value="">No runs yet</option>
+              ) : (
+                runs.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Run #{r.run_number} ({r.status})
+                  </option>
+                ))
+              )}
             </select>
 
             {isRunning && (
@@ -208,7 +252,7 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
           />
           <MetricCard
             label="Random Seed"
-            value={run?.random_seed ?? 42}
+            value={run?.random_seed ?? 'None'}
             subtitle="Deterministic trials"
             icon={<Clock className="h-4 w-4 text-text-secondary" />}
           />
@@ -219,6 +263,19 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
             icon={<Activity className="h-4 w-4 text-primary" />}
           />
         </div>
+
+        {run?.status === 'failed' && run.error_message && (
+          <div
+            role="alert"
+            className="rounded-md border border-error/30 bg-error/10 p-3 flex items-start gap-2.5 text-xs text-error"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+            <div>
+              <p className="font-semibold">Run Failed</p>
+              <p className="mt-0.5 font-mono break-words">{run.error_message}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Architectures Status Grid */}
