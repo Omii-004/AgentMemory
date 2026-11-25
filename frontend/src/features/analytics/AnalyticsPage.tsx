@@ -49,16 +49,20 @@ import type {
   RunResponse,
 } from '@/types/api';
 
-function normalizePercent(val: number | null | undefined): number {
-  if (val === null || val === undefined || isNaN(val)) return 0;
-  // If backend already returned a percentage (e.g. 100.0 or 66.67), keep it;
-  // if it returned a 0.0 - 1.0 fraction (e.g. 0.92 or 0.5), scale by 100.
-  const scaled = val > 1.0 ? val : val * 100;
-  return Number(scaled.toFixed(1));
+/** Rounds a metric that the backend already returns on a 0–100 percentage scale. */
+function roundPercent(val: number | null | undefined): number {
+  if (val === null || val === undefined || Number.isNaN(val)) return 0;
+  return Number(val.toFixed(1));
+}
+
+/** Converts a 0–1 ratio metric (e.g. Precision@K, Recall@K) into a 0–100 percentage. */
+function ratioToPercent(val: number | null | undefined): number {
+  if (val === null || val === undefined || Number.isNaN(val)) return 0;
+  return Number((val * 100).toFixed(1));
 }
 
 function formatPercent(val: number | null | undefined): string {
-  return `${normalizePercent(val).toFixed(1)}%`;
+  return `${roundPercent(val).toFixed(1)}%`;
 }
 
 const ARCHITECTURE_NAMES: Record<string, string> = {
@@ -197,13 +201,14 @@ export function AnalyticsPage() {
 
   const bestArchitecture = useMemo(() => {
     if (!archEntries.length) return null;
-    let top = archEntries[0];
+    let top: (typeof archEntries)[number] | null = null;
     for (const entry of archEntries) {
-      if ((entry[1].task_success_rate ?? 0) > (top[1].task_success_rate ?? 0)) {
+      const tsr = entry[1].task_success_rate ?? 0;
+      if (tsr > 0 && (!top || tsr > (top[1].task_success_rate ?? 0))) {
         top = entry;
       }
     }
-    return { arch: top[0], metrics: top[1] };
+    return top ? { arch: top[0], metrics: top[1] } : null;
   }, [archEntries]);
 
   // Overall metric aggregates
@@ -217,9 +222,9 @@ export function AnalyticsPage() {
     let totalTokens = 0;
 
     for (const [, m] of archEntries) {
-      sumTsr += normalizePercent(m.task_success_rate);
-      maxPrecision = Math.max(maxPrecision, normalizePercent(m.precision_at_k));
-      maxRecall = Math.max(maxRecall, normalizePercent(m.recall_at_k));
+      sumTsr += roundPercent(m.task_success_rate);
+      maxPrecision = Math.max(maxPrecision, ratioToPercent(m.precision_at_k));
+      maxRecall = Math.max(maxRecall, ratioToPercent(m.recall_at_k));
       sumMrr += m.mrr ?? 0;
       sumLatency += m.avg_total_latency_ms ?? 0;
       totalTokens += m.total_tokens ?? 0;
@@ -240,9 +245,9 @@ export function AnalyticsPage() {
     return archEntries.map(([arch, m]) => ({
       architecture: ARCHITECTURE_NAMES[arch] ?? arch,
       key: arch,
-      TSR: normalizePercent(m.task_success_rate),
-      Precision: normalizePercent(m.precision_at_k),
-      Recall: normalizePercent(m.recall_at_k),
+      TSR: roundPercent(m.task_success_rate),
+      Precision: ratioToPercent(m.precision_at_k),
+      Recall: ratioToPercent(m.recall_at_k),
     }));
   }, [archEntries]);
 
@@ -252,7 +257,7 @@ export function AnalyticsPage() {
       for (const [arch, m] of archEntries) {
         const catScore =
           m.categories?.[cat.key] ?? (m[cat.key] as number | undefined) ?? 0;
-        row[arch] = normalizePercent(catScore);
+        row[arch] = roundPercent(catScore);
       }
       return row;
     });
@@ -603,9 +608,9 @@ export function AnalyticsPage() {
                       ) : (
                         archEntries.map(([arch, m]) => {
                           const isWinner = bestArchitecture?.arch === arch;
-                          const tsrPercent = normalizePercent(m.task_success_rate);
-                          const precisionPercent = normalizePercent(m.precision_at_k);
-                          const recallPercent = normalizePercent(m.recall_at_k);
+                          const tsrPercent = roundPercent(m.task_success_rate);
+                          const precisionPercent = ratioToPercent(m.precision_at_k);
+                          const recallPercent = ratioToPercent(m.recall_at_k);
                           const mrr = (m.mrr ?? 0).toFixed(3);
                           const utility = (m.memory_utility ?? 0).toFixed(3);
                           const latency = (m.avg_total_latency_ms ?? 0).toFixed(1);
@@ -977,7 +982,7 @@ export function AnalyticsPage() {
                                   </td>
                                   <td className="px-3 py-2 font-semibold text-text-primary">
                                     {pair.mean_diff >= 0 ? '+' : ''}
-                                    {(pair.mean_diff * (Math.abs(pair.mean_diff) > 1.0 ? 1 : 100)).toFixed(1)}%
+                                    {(pair.mean_diff * 100).toFixed(1)}%
                                   </td>
                                   <td className="px-3 py-2 text-text-primary">
                                     t={pair.t_statistic.toFixed(2)} (p={pT})
