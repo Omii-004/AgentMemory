@@ -15,6 +15,7 @@ import {
   Search,
   Sparkles,
   Zap,
+  AlertCircle,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -32,6 +33,7 @@ import { MetricCard } from '@/components/common/MetricCard';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
+import { ApiClientError } from '@/services/api-client'
 import {
   getRun,
   getRunComparison,
@@ -444,7 +446,17 @@ export function AnalyticsPage() {
             </div>
           </div>
 
-          {!activeRun ? (
+          {runsQuery.isError ? (
+            <ErrorState
+              title="Failed to load experiment runs"
+              message={
+                runsQuery.error instanceof ApiClientError
+                  ? runsQuery.error.message
+                  : 'Could not retrieve runs for the selected experiment.'
+              }
+              onRetry={() => void runsQuery.refetch()}
+            />
+          ) : !activeRun ? (
             <EmptyState
               title="No runs executed yet"
               description="This experiment has no recorded benchmark runs. Launch a run in Benchmark Studio to compute metrics."
@@ -497,6 +509,32 @@ export function AnalyticsPage() {
                   )}
                 </div>
               </div>
+
+              {activeRun.status === 'failed' && activeRun.error_message && (
+                <div
+                  role="alert"
+                  className="p-4 bg-error/10 border border-error/30 rounded-lg flex items-start gap-2.5 text-xs text-error"
+                >
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold">Benchmark Run Failed</p>
+                    <p className="mt-0.5 font-mono break-words">{activeRun.error_message}</p>
+                  </div>
+                </div>
+              )}
+
+              {(comparisonQuery.isError || statisticsQuery.isError || failuresQuery.isError) && (
+                <ErrorState
+                  title="Some analytics data failed to load"
+                  message="One or more run metric endpoints returned an error."
+                  onRetry={() => {
+                    void comparisonQuery.refetch();
+                    void statisticsQuery.refetch();
+                    void failuresQuery.refetch();
+                    void tracesQuery.refetch();
+                  }}
+                />
+              )}
 
               {/* Top KPI Metric Cards */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1074,7 +1112,17 @@ export function AnalyticsPage() {
                   </div>
                 </div>
 
-                {filteredFailures.length === 0 ? (
+                {failuresQuery.isError ? (
+                  <ErrorState
+                    title="Failed to load failure analysis"
+                    message={
+                      failuresQuery.error instanceof ApiClientError
+                        ? failuresQuery.error.message
+                        : 'Could not retrieve failed task records.'
+                    }
+                    onRetry={() => void failuresQuery.refetch()}
+                  />
+                ) : filteredFailures.length === 0 ? (
                   <div className="py-8 text-center text-text-secondary text-sm space-y-1">
                     <CheckCircle2 className="h-6 w-6 text-emerald-500 mx-auto" />
                     <p className="font-medium text-text-primary">
