@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -24,6 +25,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const registerUser = useAuthStore((state) => state.register);
   const login = useAuthStore((state) => state.login);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export function RegisterPage() {
         display_name: values.display_name?.trim() || null,
       });
       await login({ email: values.email, password: values.password });
+      queryClient.clear();
       navigate('/dashboard', { replace: true });
     } catch (err) {
       if (err instanceof ApiClientError) {
