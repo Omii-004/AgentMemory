@@ -18,8 +18,23 @@ export function BenchmarkStudioPage() {
   const activeTab: StudioTab =
     rawTab === 'wizard' || rawTab === 'monitor' || rawTab === 'datasets' ? rawTab : 'wizard';
 
-  const [wizardDatasetId, setWizardDatasetId] = useState<string | null>(null);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [wizardDatasetState, setWizardDatasetState] = useState<{
+    projectId: string;
+    datasetId: string;
+  } | null>(null);
+  const [selectedRunState, setSelectedRunState] = useState<{
+    projectId: string;
+    runId: string;
+  } | null>(null);
+
+  const wizardDatasetId =
+    activeProjectId && wizardDatasetState?.projectId === activeProjectId
+      ? wizardDatasetState.datasetId
+      : null;
+  const selectedRunId =
+    activeProjectId && selectedRunState?.projectId === activeProjectId
+      ? selectedRunState.runId
+      : null;
 
   const setTab = (tab: StudioTab) => {
     setSearchParams({ tab });
@@ -66,11 +81,10 @@ export function BenchmarkStudioPage() {
             <button
               type="button"
               onClick={() => setTab('wizard')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                activeTab === 'wizard'
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'wizard'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               <FlaskConical className="h-4 w-4" aria-hidden="true" />
               Experiment Wizard
@@ -78,11 +92,10 @@ export function BenchmarkStudioPage() {
             <button
               type="button"
               onClick={() => setTab('monitor')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                activeTab === 'monitor'
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'monitor'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               <PlayCircle className="h-4 w-4" aria-hidden="true" />
               Run Monitor
@@ -90,11 +103,10 @@ export function BenchmarkStudioPage() {
             <button
               type="button"
               onClick={() => setTab('datasets')}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                activeTab === 'datasets'
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'datasets'
                   ? 'border-primary text-primary'
                   : 'border-transparent text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               <Database className="h-4 w-4" aria-hidden="true" />
               Datasets & Tasks
@@ -104,10 +116,11 @@ export function BenchmarkStudioPage() {
           {/* TAB 1: EXPERIMENT WIZARD */}
           {activeTab === 'wizard' && (
             <ExperimentWizard
+              key={`${activeProjectId}:${wizardDatasetId ?? 'default'}`}
               projectId={activeProjectId}
               initialDatasetId={wizardDatasetId}
               onRunStarted={(run) => {
-                setSelectedRunId(run.id);
+                setSelectedRunState({ projectId: activeProjectId, runId: run.id });
                 setTab('monitor');
               }}
               onGoToDatasets={() => setTab('datasets')}
@@ -117,18 +130,22 @@ export function BenchmarkStudioPage() {
           {/* TAB 2: RUN MONITOR */}
           {activeTab === 'monitor' && (
             <RunMonitor
+              key={activeProjectId}
               projectId={activeProjectId}
               selectedRunId={selectedRunId}
-              onSelectRun={(runId) => setSelectedRunId(runId)}
+              onSelectRun={(runId) =>
+                setSelectedRunState({ projectId: activeProjectId, runId })
+              }
             />
           )}
 
           {/* TAB 3: DATASETS & TASKS */}
           {activeTab === 'datasets' && (
             <DatasetManager
+              key={activeProjectId}
               projectId={activeProjectId}
               onSelectDatasetForExperiment={(dsId) => {
-                setWizardDatasetId(dsId);
+                setWizardDatasetState({ projectId: activeProjectId, datasetId: dsId });
                 setTab('wizard');
               }}
             />
