@@ -42,8 +42,9 @@ export function Topbar() {
   });
 
   const selectorProjects = useMemo(() => {
-    if (extraProjectQuery.data && !projects.some((p) => p.id === extraProjectQuery.data.id)) {
-      return [extraProjectQuery.data, ...projects];
+    const extraProject = extraProjectQuery.data;
+    if (extraProject && !projects.some((p) => p.id === extraProject.id)) {
+      return [extraProject, ...projects];
     }
     return projects;
   }, [projects, extraProjectQuery.data]);
