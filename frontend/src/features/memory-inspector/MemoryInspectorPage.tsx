@@ -139,6 +139,7 @@ export function MemoryInspectorPage() {
       setDeleteConfirmOpen(false);
       void queryClient.invalidateQueries({ queryKey: ['memories', activeProjectId] });
       void queryClient.invalidateQueries({ queryKey: ['memory-facts', activeMemoryId] });
+      void queryClient.invalidateQueries({ queryKey: ['memory-versions', activeMemoryId] });
       void queryClient.invalidateQueries({ queryKey: ['memory-events', activeMemoryId] });
       pushToast({
         title: 'Zero-leakage purge executed',
@@ -412,7 +413,12 @@ export function MemoryInspectorPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => setEditOpen(true)}
-                        disabled={activeMemory.status === 'deleted'}
+                        disabled={activeMemory.status !== 'active'}
+                        title={
+                          activeMemory.status !== 'active'
+                            ? `Cannot edit memory in '${activeMemory.status}' status`
+                            : undefined
+                        }
                       >
                         <Edit2 className="h-3.5 w-3.5" aria-hidden="true" />
                         Edit
@@ -708,7 +714,9 @@ export function MemoryInspectorPage() {
           onUpdated={() => {
             setEditOpen(false);
             void queryClient.invalidateQueries({ queryKey: ['memories', activeProjectId] });
+            void queryClient.invalidateQueries({ queryKey: ['memory-facts', activeMemory.id] });
             void queryClient.invalidateQueries({ queryKey: ['memory-versions', activeMemory.id] });
+            void queryClient.invalidateQueries({ queryKey: ['memory-events', activeMemory.id] });
           }}
         />
       )}
