@@ -322,11 +322,10 @@ export function ProjectDetailPage() {
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-              activeTab === tab.id
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === tab.id
                 ? 'border-primary text-primary'
                 : 'border-transparent text-text-secondary hover:text-text-primary'
-            }`}
+              }`}
           >
             {tab.label}
           </button>
@@ -766,9 +765,8 @@ export function ProjectDetailPage() {
                     key={s.id}
                     type="button"
                     onClick={() => setSelectedSessionId(s.id)}
-                    className={`w-full text-left px-3 py-2.5 text-sm cursor-pointer ${
-                      activeSessionId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-canvas'
-                    }`}
+                    className={`w-full text-left px-3 py-2.5 text-sm cursor-pointer ${activeSessionId === s.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-canvas'
+                      }`}
                   >
                     <p className="truncate">{s.name || 'Untitled Session'}</p>
                     <p className="text-[11px] font-mono text-text-secondary">
@@ -799,6 +797,11 @@ export function ProjectDetailPage() {
                           <span>{formatDateTime(msg.created_at)}</span>
                         </div>
                         <p className="text-text-primary whitespace-pre-wrap">{msg.content}</p>
+                        {msg.metadata && Object.keys(msg.metadata).length > 0 && (
+                          <pre className="mt-2 p-2 rounded bg-canvas border border-border font-mono text-[11px] text-text-secondary overflow-x-auto">
+                            {JSON.stringify(msg.metadata, null, 2)}
+                          </pre>
+                        )}
                       </div>
                     ))
                   )}
