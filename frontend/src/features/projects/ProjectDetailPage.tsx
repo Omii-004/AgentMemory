@@ -58,6 +58,13 @@ const TABS: Array<{ id: ProjectTab; label: string }> = [
 
 export function ProjectDetailPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  if (!projectId) {
+    return <ErrorState title="Project unavailable" message="Missing project ID." />;
+  }
+  return <ProjectDetailContent key={projectId} projectId={projectId} />;
+}
+
+function ProjectDetailContent({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -182,7 +189,12 @@ export function ProjectDetailPage() {
   const generateMutation = useMutation({
     mutationFn: (datasetId: string) =>
       generateSyntheticTasks(datasetId, { tasks_per_category: 2, distractor_count: 6, seed: 42 }),
-    onSuccess: (res) => {
+    onSuccess: (res, datasetId) => {
+      setValidationMap((prev) => {
+        const next = { ...prev };
+        delete next[datasetId];
+        return next;
+      });
       void queryClient.invalidateQueries({ queryKey: ['datasets', projectId] });
       pushToast({
         title: 'Synthetic tasks generated',
@@ -680,7 +692,7 @@ export function ProjectDetailPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        isLoading={generateMutation.isPending}
+                        isLoading={generateMutation.isPending && generateMutation.variables === ds.id}
                         onClick={() => generateMutation.mutate(ds.id)}
                       >
                         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
@@ -689,6 +701,7 @@ export function ProjectDetailPage() {
                       <Button
                         size="sm"
                         variant="secondary"
+                        isLoading={validateMutation.isPending && validateMutation.variables === ds.id}
                         onClick={() => validateMutation.mutate(ds.id)}
                       >
                         Validate
