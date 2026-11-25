@@ -11,7 +11,7 @@ import {
   Plus,
   RefreshCw,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
@@ -30,11 +30,15 @@ import type { ReportResponse } from '@/types/api';
 
 export function ReportsPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { activeProjectId } = useWorkspaceStore();
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [previewReport, setPreviewReport] = useState<ReportResponse | null>(null);
+
+  const filterRunId = searchParams.get('runId') ?? searchParams.get('run_id');
+  const initialExperimentId = searchParams.get('experimentId');
 
   // 1. Fetch project reports
   const reportsQuery = useQuery({
@@ -43,6 +47,9 @@ export function ReportsPage() {
     enabled: !!activeProjectId,
   });
   const reports = reportsQuery.data ?? [];
+  const visibleReports = filterRunId
+    ? reports.filter((r) => r.run_id === filterRunId)
+    : reports;
 
   // 2. Fetch project experiments for report generator modal
   const experimentsQuery = useQuery({
@@ -127,16 +134,41 @@ export function ReportsPage() {
             </Button>
           }
         />
+      ) : visibleReports.length === 0 ? (
+        <EmptyState
+          title="No reports for this benchmark run yet"
+          description={`Run ${filterRunId?.slice(0, 8)}... does not have an exported JSON or CSV report yet.`}
+          action={
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setSearchParams({})}>
+                Show All Reports ({reports.length})
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Generate Report for Run
+              </Button>
+            </div>
+          }
+        />
       ) : (
         <div className="bg-surface border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-            <div className="flex items-center gap-2">
+          <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold text-text-primary">
                 Generated Benchmark Reports
               </h2>
               <span className="px-2 py-0.5 rounded text-xs font-mono bg-canvas border border-border text-text-secondary">
-                {reports.length} reports
+                {visibleReports.length} reports
               </span>
+              {filterRunId && (
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({})}
+                  className="px-2 py-0.5 rounded text-xs font-mono bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 cursor-pointer"
+                >
+                  Run {filterRunId.slice(0, 8)}... ×
+                </button>
+              )}
             </div>
             <Button
               variant="ghost"
@@ -164,7 +196,7 @@ export function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border font-mono text-xs">
-                {reports.map((report) => (
+                {visibleReports.map((report) => (
                   <tr key={report.id} className="hover:bg-canvas transition-colors">
                     <td className="px-4 py-3 font-semibold text-text-primary">
                       <div className="flex items-center gap-1.5">
@@ -250,6 +282,8 @@ export function ReportsPage() {
           open={createOpen}
           experiments={experiments}
           experimentsLoading={experimentsQuery.isLoading}
+          initialExperimentId={initialExperimentId}
+          initialRunId={filterRunId}
           onClose={() => setCreateOpen(false)}
           onGenerated={() => {
             queryClient.invalidateQueries({ queryKey: ['project-reports', activeProjectId] });
@@ -278,6 +312,8 @@ interface GenerateReportModalProps {
   open: boolean;
   experiments: Array<{ id: string; name: string }>;
   experimentsLoading?: boolean;
+  initialExperimentId?: string | null;
+  initialRunId?: string | null;
   onClose: () => void;
   onGenerated: () => void;
 }
@@ -286,13 +322,15 @@ function GenerateReportModal({
   open,
   experiments,
   experimentsLoading = false,
+  initialExperimentId,
+  initialRunId,
   onClose,
   onGenerated,
 }: GenerateReportModalProps) {
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
-  const [selectedExpId, setSelectedExpId] = useState<string>('');
-  const [selectedRunId, setSelectedRunId] = useState<string>('');
+  const [selectedExpId, setSelectedExpId] = useState<string>(initialExperimentId ?? '');
+  const [selectedRunId, setSelectedRunId] = useState<string>(initialRunId ?? '');
   const [reportType, setReportType] = useState<'json' | 'csv'>('json');
 
   // Derive effective experiment selection during render (handles async load after modal mounts)
