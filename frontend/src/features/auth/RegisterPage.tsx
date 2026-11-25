@@ -13,7 +13,10 @@ const registerSchema = z
   .object({
     display_name: z.string().max(150, 'Display name must be 150 characters or fewer').optional(),
     email: z.email('Enter a valid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: z
+      .string()
+      .min(8, 'Password must be at least 8 characters')
+      .max(72, 'Password must be 72 characters or fewer'),
     confirmPassword: z.string().min(1, 'Confirm your password'),
   })
   .refine((data) => data.password === data.confirmPassword, {
