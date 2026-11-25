@@ -18,7 +18,7 @@ import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
 import {
   consolidateNamespace,
@@ -218,8 +218,8 @@ export function MemoryLabPage() {
       namespace_id: activeNamespace.id,
       content: storeContent.trim(),
       memory_type: storeType,
-      importance: Number(storeImportance) || 0.5,
-      confidence: Number(storeConfidence) || 1.0,
+      importance: parseNumberOrDefault(storeImportance, 0.5),
+      confidence: parseNumberOrDefault(storeConfidence, 1.0),
       subject: storeSubject.trim() || null,
       predicate: storePredicate.trim() || null,
       object_value: storeObject.trim() || null,
@@ -234,7 +234,7 @@ export function MemoryLabPage() {
     const payload: MemoryRetrieveRequest = {
       namespace_id: activeNamespace.id,
       query: retrieveQuery.trim(),
-      top_k: Number(retrieveTopK) || 5,
+      top_k: parseNumberOrDefault(retrieveTopK, 5),
       as_of: retrieveAsOf ? new Date(retrieveAsOf).toISOString() : null,
     };
     retrieveMutation.mutate(payload);
@@ -243,7 +243,7 @@ export function MemoryLabPage() {
   const handleConsolidateSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!activeNamespace) return;
-    consolidateMutation.mutate({ min_memories: Number(consolidateMin) || 2 });
+    consolidateMutation.mutate({ min_memories: parseNumberOrDefault(consolidateMin, 2) });
   };
 
   return (
@@ -412,11 +412,10 @@ export function MemoryLabPage() {
                     <div
                       key={ns.id}
                       onClick={() => setSelectedNamespaceId(ns.id)}
-                      className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
-                          : 'border-border bg-canvas/40 hover:bg-canvas hover:border-border/80'
-                      }`}
+                      className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${isSelected
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                        : 'border-border bg-canvas/40 hover:bg-canvas hover:border-border/80'
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <span className="font-mono text-xs font-semibold uppercase px-2 py-0.5 rounded bg-surface border border-border text-text-primary">
@@ -439,7 +438,7 @@ export function MemoryLabPage() {
                       <p className="font-mono text-[11px] text-text-secondary truncate mt-0.5">
                         {ns.id}
                       </p>
-                                            <div className="mt-2 pt-2 border-t border-border/70 flex items-center justify-between text-[11px] text-text-secondary">
+                      <div className="mt-2 pt-2 border-t border-border/70 flex items-center justify-between text-[11px] text-text-secondary">
                         <span className="truncate">
                           {Object.keys(ns.config ?? {}).length > 0
                             ? JSON.stringify(ns.config ?? {}).slice(0, 30)
@@ -475,33 +474,30 @@ export function MemoryLabPage() {
                   <button
                     type="button"
                     onClick={() => setWorkbenchTab('store')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${
-                      workbenchTab === 'store'
-                        ? 'bg-primary text-white'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${workbenchTab === 'store'
+                      ? 'bg-primary text-white'
+                      : 'text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     Store Memory
                   </button>
                   <button
                     type="button"
                     onClick={() => setWorkbenchTab('retrieve')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${
-                      workbenchTab === 'retrieve'
-                        ? 'bg-primary text-white'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${workbenchTab === 'retrieve'
+                      ? 'bg-primary text-white'
+                      : 'text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     Retrieve Memories
                   </button>
                   <button
                     type="button"
                     onClick={() => setWorkbenchTab('consolidate')}
-                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${
-                      workbenchTab === 'consolidate'
-                        ? 'bg-primary text-white'
-                        : 'text-text-secondary hover:text-text-primary'
-                    }`}
+                    className={`px-3 py-1.5 rounded text-xs font-medium cursor-pointer transition-colors ${workbenchTab === 'consolidate'
+                      ? 'bg-primary text-white'
+                      : 'text-text-secondary hover:text-text-primary'
+                      }`}
                   >
                     Consolidate
                   </button>
@@ -580,35 +576,35 @@ export function MemoryLabPage() {
 
                       {(activeNamespace.architecture_type === 'structured' ||
                         activeNamespace.architecture_type === 'hybrid') && (
-                        <div className="p-3 rounded-md border border-border bg-canvas/40 space-y-2">
-                          <p className="text-xs font-semibold text-text-primary">
-                            Optional Relational Fact Attributes (S-P-O)
-                          </p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                            <input
-                              type="text"
-                              value={storeSubject}
-                              onChange={(e) => setStoreSubject(e.target.value)}
-                              placeholder="Subject (e.g. user_preference)"
-                              className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
-                            />
-                            <input
-                              type="text"
-                              value={storePredicate}
-                              onChange={(e) => setStorePredicate(e.target.value)}
-                              placeholder="Predicate (e.g. timezone)"
-                              className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
-                            />
-                            <input
-                              type="text"
-                              value={storeObject}
-                              onChange={(e) => setStoreObject(e.target.value)}
-                              placeholder="Object (e.g. Asia/Tokyo)"
-                              className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
-                            />
+                          <div className="p-3 rounded-md border border-border bg-canvas/40 space-y-2">
+                            <p className="text-xs font-semibold text-text-primary">
+                              Optional Relational Fact Attributes (S-P-O)
+                            </p>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <input
+                                type="text"
+                                value={storeSubject}
+                                onChange={(e) => setStoreSubject(e.target.value)}
+                                placeholder="Subject (e.g. user_preference)"
+                                className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
+                              />
+                              <input
+                                type="text"
+                                value={storePredicate}
+                                onChange={(e) => setStorePredicate(e.target.value)}
+                                placeholder="Predicate (e.g. timezone)"
+                                className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
+                              />
+                              <input
+                                type="text"
+                                value={storeObject}
+                                onChange={(e) => setStoreObject(e.target.value)}
+                                placeholder="Object (e.g. Asia/Tokyo)"
+                                className="h-8 px-2 rounded border border-border bg-surface text-xs font-mono"
+                              />
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
                       <Button type="submit" isLoading={storeMutation.isPending} className="w-full">
                         <Database className="h-4 w-4" aria-hidden="true" />
@@ -850,21 +846,21 @@ export function MemoryLabPage() {
                               </p>
                               <div className="space-y-0.5 font-mono text-[11px] text-text-secondary">
                                 {lastConsolidateResult.source_memory_ids.map((id) => (
-                              <p key={id} className="truncate">
-                                • {id}
-                              </p>
-                            ))}
-                          </div>
+                                  <p key={id} className="truncate">
+                                    • {id}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </section>
-      )}
+            </section>
+          )}
         </>
       )}
 
@@ -920,9 +916,9 @@ function CreateNamespaceModal({ open, projectId, onClose, onCreated }: CreateNam
     mutationFn: () => {
       const config: Record<string, unknown> = {};
       if (arch === 'history') {
-        config.window_size = Number(windowSize) || 5;
+        config.window_size = parseNumberOrDefault(windowSize, 5);
       } else if (arch === 'vector') {
-        config.similarity_threshold = Number(similarityThreshold) || 0.0;
+        config.similarity_threshold = parseNumberOrDefault(similarityThreshold, 0.0);
       }
       return createNamespace(projectId, {
         architecture_type: arch,
