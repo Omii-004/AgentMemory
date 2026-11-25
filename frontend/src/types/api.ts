@@ -97,6 +97,7 @@ export interface MessageResponse {
   sequence_number: number;
   role: string;
   content: string;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
