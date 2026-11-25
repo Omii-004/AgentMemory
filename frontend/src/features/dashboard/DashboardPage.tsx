@@ -161,6 +161,21 @@ export function DashboardPage() {
         />
       ) : (
         <>
+          {(experimentsQuery.isError ||
+            datasetsQuery.isError ||
+            namespacesQuery.isError ||
+            reportsQuery.isError) && (
+              <ErrorState
+                title="Some workspace metrics could not be loaded"
+                message="One or more project summary queries failed."
+                onRetry={() => {
+                  void experimentsQuery.refetch();
+                  void datasetsQuery.refetch();
+                  void namespacesQuery.refetch();
+                  void reportsQuery.refetch();
+                }}
+              />
+            )}
           {/* Summary metric cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <MetricCard
