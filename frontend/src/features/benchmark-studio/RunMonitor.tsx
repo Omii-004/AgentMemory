@@ -175,13 +175,13 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
 
             {run?.status === 'completed' && (
               <>
-                <Link to={`/analytics?run_id=${run.id}`}>
+                <Link to={`/analytics?experimentId=${run.experiment_id}&runId=${run.id}`}>
                   <Button size="sm">
                     <Activity className="h-4 w-4" aria-hidden="true" />
                     Analytics
                   </Button>
                 </Link>
-                <Link to={`/reports?run_id=${run.id}`}>
+                <Link to={`/reports?experimentId=${run.experiment_id}&runId=${run.id}`}>
                   <Button size="sm" variant="outline">
                     <FileText className="h-4 w-4" aria-hidden="true" />
                     Reports
