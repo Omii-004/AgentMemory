@@ -204,6 +204,13 @@ export function ProjectDetailPage() {
     onSuccess: (res, datasetId) => {
       setValidationMap((prev) => ({ ...prev, [datasetId]: res }));
     },
+    onError: (err) => {
+      pushToast({
+        title: 'Validation failed',
+        description: err instanceof ApiClientError ? err.message : 'Unable to validate dataset.',
+        variant: 'error',
+      });
+    },
   });
 
   const deleteExpMutation = useMutation({
@@ -211,6 +218,13 @@ export function ProjectDetailPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['experiments', projectId] });
       pushToast({ title: 'Experiment deleted', variant: 'info' });
+    },
+    onError: (err) => {
+      pushToast({
+        title: 'Delete failed',
+        description: err instanceof ApiClientError ? err.message : 'Unable to delete experiment.',
+        variant: 'error',
+      });
     },
   });
 
@@ -222,6 +236,13 @@ export function ProjectDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ['sessions', projectId] });
       pushToast({ title: 'Session created', variant: 'success' });
     },
+    onError: (err) => {
+      pushToast({
+        title: 'Session creation failed',
+        description: err instanceof ApiClientError ? err.message : 'Unable to create session.',
+        variant: 'error',
+      });
+    },
   });
 
   const addMessageMutation = useMutation({
@@ -230,6 +251,13 @@ export function ProjectDetailPage() {
     onSuccess: () => {
       setMsgContent('');
       void queryClient.invalidateQueries({ queryKey: ['messages', activeSessionId] });
+    },
+    onError: (err) => {
+      pushToast({
+        title: 'Message failed',
+        description: err instanceof ApiClientError ? err.message : 'Unable to record message.',
+        variant: 'error',
+      });
     },
   });
 
@@ -257,6 +285,13 @@ export function ProjectDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
       pushToast({ title: 'Project deleted', variant: 'info' });
       navigate('/projects', { replace: true });
+    },
+    onError: (err) => {
+      pushToast({
+        title: 'Delete failed',
+        description: err instanceof ApiClientError ? err.message : 'Could not delete project.',
+        variant: 'error',
+      });
     },
   });
 
@@ -323,8 +358,8 @@ export function ProjectDetailPage() {
             type="button"
             onClick={() => setTab(tab.id)}
             className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-text-secondary hover:text-text-primary'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-text-secondary hover:text-text-primary'
               }`}
           >
             {tab.label}
@@ -401,9 +436,21 @@ export function ProjectDetailPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          void downloadReportFile(rep.id, `report_${rep.run_id}.${rep.report_type}`)
-                        }
+                        onClick={() => {
+                          void downloadReportFile(
+                            rep.id,
+                            `report_${rep.run_id}.${rep.report_type}`,
+                          ).catch((err) => {
+                            pushToast({
+                              title: 'Download failed',
+                              description:
+                                err instanceof ApiClientError
+                                  ? err.message
+                                  : 'Could not download report file.',
+                              variant: 'error',
+                            });
+                          });
+                        }}
                       >
                         <Download className="h-3.5 w-3.5" aria-hidden="true" />
                         Download
@@ -757,7 +804,9 @@ export function ProjectDetailPage() {
             </form>
 
             <div className="divide-y divide-border border border-border rounded-md">
-              {sessions.length === 0 ? (
+              {sessionsQuery.isError ? (
+                <p className="p-3 text-xs text-error">Unable to load conversation sessions.</p>
+              ) : sessions.length === 0 ? (
                 <p className="p-3 text-xs text-text-secondary">No sessions recorded yet.</p>
               ) : (
                 sessions.map((s) => (
@@ -785,7 +834,11 @@ export function ProjectDetailPage() {
             ) : (
               <>
                 <div className="border border-border rounded-md divide-y divide-border max-h-80 overflow-y-auto">
-                  {(messagesQuery.data ?? []).length === 0 ? (
+                  {messagesQuery.isPending ? (
+                    <p className="p-4 text-sm text-text-secondary">Loading session messages...</p>
+                  ) : messagesQuery.isError ? (
+                    <p className="p-4 text-sm text-error">Unable to load messages for this session.</p>
+                  ) : (messagesQuery.data ?? []).length === 0 ? (
                     <p className="p-4 text-sm text-text-secondary">No messages in this session yet.</p>
                   ) : (
                     (messagesQuery.data ?? []).map((msg) => (
