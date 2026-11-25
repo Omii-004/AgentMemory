@@ -42,7 +42,7 @@ export function ReportsPage() {
 
   // 1. Fetch project reports
   const reportsQuery = useQuery({
-    queryKey: ['project-reports', activeProjectId],
+    queryKey: ['reports', 'project', activeProjectId],
     queryFn: () => listProjectReports(activeProjectId!),
     enabled: !!activeProjectId,
   });
@@ -286,7 +286,7 @@ export function ReportsPage() {
           initialRunId={filterRunId}
           onClose={() => setCreateOpen(false)}
           onGenerated={() => {
-            queryClient.invalidateQueries({ queryKey: ['project-reports', activeProjectId] });
+            void queryClient.invalidateQueries({ queryKey: ['reports', 'project', activeProjectId] });
             setCreateOpen(false);
           }}
         />
