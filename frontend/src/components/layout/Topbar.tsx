@@ -24,7 +24,7 @@ export function Topbar() {
   const { activeProjectId, setActiveProjectId, setMobileNavOpen } = useWorkspaceStore();
 
   const { data: projectsPage, isSuccess } = useQuery({
-    queryKey: ['projects', 'selector'],
+    queryKey: ['projects', 'list'],
     queryFn: () => listProjects(1, 50),
     enabled: Boolean(user),
   });
