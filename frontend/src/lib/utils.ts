@@ -19,3 +19,10 @@ export function truncateId(id: string | null | undefined, length = 8): string {
   if (!id) return '—';
   return id.length <= length ? id : `${id.slice(0, length)}…`;
 }
+
+export function parseNumberOrDefault(value: string, fallback: number): number {
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
