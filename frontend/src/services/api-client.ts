@@ -84,6 +84,33 @@ interface RequestOptions {
   signal?: AbortSignal;
 }
 
+async function executeFetch(
+  path: string,
+  init: RequestInit,
+  skipAuthRedirect = false,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), init);
+  } catch {
+    throw new ApiClientError(
+      'Unable to reach the AgentMemory backend server. Check that FastAPI is running on port 8000.',
+      0,
+      'AM_ERR_NETWORK',
+    );
+  }
+
+  if (!response.ok) {
+    if (response.status === 401 && !skipAuthRedirect) {
+      setStoredToken(null);
+      unauthorizedHandler?.();
+    }
+    throw await parseErrorResponse(response);
+  }
+
+  return response;
+}
+
 export async function requestRaw<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = getStoredToken();
   const headers: Record<string, string> = {};
@@ -95,29 +122,16 @@ export async function requestRaw<T>(path: string, options: RequestOptions = {}):
     headers.Authorization = `Bearer ${token}`;
   }
 
-  let response: Response;
-  try {
-    response = await fetch(buildUrl(path), {
+  const response = await executeFetch(
+    path,
+    {
       method: options.method ?? 'GET',
       headers,
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
       signal: options.signal,
-    });
-  } catch {
-    throw new ApiClientError(
-      'Unable to reach the AgentMemory backend server. Check that FastAPI is running on port 8000.',
-      0,
-      'AM_ERR_NETWORK',
-    );
-  }
-
-  if (!response.ok) {
-    if (response.status === 401 && !options.skipAuthRedirect) {
-      setStoredToken(null);
-      unauthorizedHandler?.();
-    }
-    throw await parseErrorResponse(response);
-  }
+    },
+    Boolean(options.skipAuthRedirect),
+  );
 
   return (await response.json()) as T;
 }
@@ -137,14 +151,7 @@ export async function downloadBlob(path: string, fallbackFilename: string): Prom
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(buildUrl(path), { method: 'GET', headers });
-  if (!response.ok) {
-    if (response.status === 401) {
-      setStoredToken(null);
-      unauthorizedHandler?.();
-    }
-    throw await parseErrorResponse(response);
-  }
+  const response = await executeFetch(path, { method: 'GET', headers });
 
   const blob = await response.blob();
   const disposition = response.headers.get('content-disposition') ?? '';
