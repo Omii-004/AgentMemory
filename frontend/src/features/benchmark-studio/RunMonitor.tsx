@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/common/Button';
 import { MetricCard } from '@/components/common/MetricCard';
 import { Modal } from '@/components/common/Modal';
-import { EmptyState, LoadingState } from '@/components/common/StateViews';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatDateTime } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
@@ -145,6 +145,34 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
     return <LoadingState label="Loading benchmark runs..." />;
   }
 
+  if (experimentsQuery.isError) {
+    return (
+      <ErrorState
+        title="Unable to load experiments"
+        message={
+          experimentsQuery.error instanceof ApiClientError
+            ? experimentsQuery.error.message
+            : 'Could not retrieve project experiments.'
+        }
+        onRetry={() => void experimentsQuery.refetch()}
+      />
+    );
+  }
+
+  if (runsQuery.isError) {
+    return (
+      <ErrorState
+        title="Unable to load benchmark runs"
+        message={
+          runsQuery.error instanceof ApiClientError
+            ? runsQuery.error.message
+            : 'Could not retrieve runs for the selected experiment.'
+        }
+        onRetry={() => void runsQuery.refetch()}
+      />
+    );
+  }
+
   if (experiments.length === 0) {
     return (
       <EmptyState
@@ -235,6 +263,18 @@ export function RunMonitor({ projectId, selectedRunId, onSelectRun }: RunMonitor
             )}
           </div>
         </div>
+
+        {(runQuery.isError || archsQuery.isError || resultsQuery.isError) && (
+          <ErrorState
+            title="Unable to refresh run details"
+            message="One or more live monitor requests failed."
+            onRetry={() => {
+              void runQuery.refetch();
+              void archsQuery.refetch();
+              void resultsQuery.refetch();
+            }}
+          />
+        )}
 
         {/* Live Metrics Strip */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
