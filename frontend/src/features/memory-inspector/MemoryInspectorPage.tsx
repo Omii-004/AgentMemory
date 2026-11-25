@@ -16,7 +16,7 @@ import {
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
-import { EmptyState, LoadingState } from '@/components/common/StateViews';
+import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { formatDateTime, parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
@@ -205,6 +205,16 @@ export function MemoryInspectorPage() {
         />
       ) : namespacesQuery.isPending ? (
         <LoadingState label="Loading project memory stores..." />
+      ) : namespacesQuery.isError ? (
+        <ErrorState
+          title="Unable to load memory namespaces"
+          message={
+            namespacesQuery.error instanceof ApiClientError
+              ? namespacesQuery.error.message
+              : 'Could not retrieve memory stores for this project.'
+          }
+          onRetry={() => void namespacesQuery.refetch()}
+        />
       ) : (
         /* 3-PANEL DESKTOP LAYOUT (Design Spec 6.5) */
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -329,6 +339,18 @@ export function MemoryInspectorPage() {
               {memoriesQuery.isPending ? (
                 <div className="p-6 text-center text-xs text-text-secondary">
                   Loading memory records...
+                </div>
+              ) : memoriesQuery.isError ? (
+                <div className="p-4">
+                  <ErrorState
+                    title="Unable to load memory records"
+                    message={
+                      memoriesQuery.error instanceof ApiClientError
+                        ? memoriesQuery.error.message
+                        : 'Could not retrieve memories for this namespace.'
+                    }
+                    onRetry={() => void memoriesQuery.refetch()}
+                  />
                 </div>
               ) : filteredMemories.length === 0 ? (
                 <div className="p-6 text-center text-xs text-text-secondary space-y-2">
@@ -569,6 +591,12 @@ export function MemoryInspectorPage() {
 
                       {factsQuery.isPending ? (
                         <p className="text-xs text-text-secondary">Loading extracted facts…</p>
+                      ) : factsQuery.isError ? (
+                        <ErrorState
+                          title="Unable to load extracted facts"
+                          message="Could not retrieve S-P-O facts for this memory."
+                          onRetry={() => void factsQuery.refetch()}
+                        />
                       ) : (factsQuery.data ?? []).length === 0 ? (
                         <div className="p-6 text-center text-xs text-text-secondary border border-border rounded-md bg-canvas/30">
                           {activeMemory.status === 'deleted'
@@ -615,6 +643,12 @@ export function MemoryInspectorPage() {
                       </h4>
                       {versionsQuery.isPending ? (
                         <p className="text-xs text-text-secondary">Loading version history…</p>
+                      ) : versionsQuery.isError ? (
+                        <ErrorState
+                          title="Unable to load version history"
+                          message="Could not retrieve monotonic version entries."
+                          onRetry={() => void versionsQuery.refetch()}
+                        />
                       ) : (versionsQuery.data ?? []).length === 0 ? (
                         <div className="p-6 text-center text-xs text-text-secondary border border-border rounded-md bg-canvas/30">
                           No previous versions recorded. Memory is at original version.
@@ -664,6 +698,12 @@ export function MemoryInspectorPage() {
                       </h4>
                       {eventsQuery.isPending ? (
                         <p className="text-xs text-text-secondary">Loading lifecycle events…</p>
+                      ) : eventsQuery.isError ? (
+                        <ErrorState
+                          title="Unable to load lifecycle events"
+                          message="Could not retrieve lifecycle audit events."
+                          onRetry={() => void eventsQuery.refetch()}
+                        />
                       ) : (eventsQuery.data ?? []).length === 0 ? (
                         <div className="p-6 text-center text-xs text-text-secondary border border-border rounded-md bg-canvas/30">
                           No audit events recorded for this memory record.
