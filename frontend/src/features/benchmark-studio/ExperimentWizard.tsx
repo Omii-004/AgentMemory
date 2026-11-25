@@ -24,6 +24,15 @@ interface ExperimentWizardProps {
 
 const ALL_ARCHITECTURES: ArchitectureType[] = ['history', 'vector', 'structured', 'hybrid'];
 
+type LlmProviderOption = 'mock' | 'ollama' | 'openai' | 'openai_compatible';
+
+const DEFAULT_MODEL_BY_PROVIDER: Record<LlmProviderOption, string> = {
+  mock: 'mock-evaluator',
+  ollama: 'llama3:latest',
+  openai: 'gpt-4o-mini',
+  openai_compatible: 'gpt-4o-mini',
+};
+
 export function ExperimentWizard({
   projectId,
   initialDatasetId,
@@ -53,8 +62,8 @@ export function ExperimentWizard({
   const [datasetId, setDatasetId] = useState<string | null>(initialDatasetId ?? null);
 
   // Step 4: Model
-  const [llmProvider, setLlmProvider] = useState<'mock' | 'ollama' | 'openai_compatible'>('mock');
-  const [llmModel, setLlmModel] = useState('mock-evaluator');
+  const [llmProvider, setLlmProvider] = useState<LlmProviderOption>('mock');
+  const [llmModel, setLlmModel] = useState(DEFAULT_MODEL_BY_PROVIDER.mock);
   const [temperature, setTemperature] = useState('0.0');
   const [maxTokens, setMaxTokens] = useState('512');
 
@@ -252,10 +261,9 @@ export function ExperimentWizard({
               {ALL_ARCHITECTURES.map((arch) => {
                 const checked = selectedArchs.includes(arch);
                 return (
-                  <div
+                  <label
                     key={arch}
-                    onClick={() => toggleArch(arch)}
-                    className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${checked
+                    className={`block p-4 rounded-lg border text-left cursor-pointer transition-all ${checked
                       ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
                       : 'border-border bg-canvas/30 hover:bg-canvas opacity-70'
                       }`}
@@ -265,7 +273,7 @@ export function ExperimentWizard({
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => { }}
+                        onChange={() => toggleArch(arch)}
                         aria-label={`Select ${arch} architecture`}
                         className="rounded border-border text-primary"
                       />
@@ -276,7 +284,7 @@ export function ExperimentWizard({
                       {arch === 'structured' && 'Subject-Predicate-Object relational triples'}
                       {arch === 'hybrid' && 'Multi-factor composite score ranking'}
                     </p>
-                  </div>
+                  </label>
                 );
               })}
             </div>
@@ -391,13 +399,22 @@ export function ExperimentWizard({
               <select
                 id="wizard-llm-provider"
                 value={llmProvider}
-                onChange={(e) =>
-                  setLlmProvider(e.target.value as 'mock' | 'ollama' | 'openai_compatible')
-                }
+                onChange={(e) => {
+                  const nextProvider = e.target.value as LlmProviderOption;
+                  setLlmProvider(nextProvider);
+                  const currentTrimmed = llmModel.trim();
+                  if (
+                    !currentTrimmed ||
+                    Object.values(DEFAULT_MODEL_BY_PROVIDER).includes(currentTrimmed)
+                  ) {
+                    setLlmModel(DEFAULT_MODEL_BY_PROVIDER[nextProvider]);
+                  }
+                }}
                 className="w-full h-10 px-3 rounded-md border border-border bg-surface text-sm font-mono"
               >
                 <option value="mock">mock (offline deterministic evaluation)</option>
                 <option value="ollama">ollama (local model service)</option>
+                <option value="openai">openai (OpenAI API)</option>
                 <option value="openai_compatible">openai_compatible (custom endpoint)</option>
               </select>
             </div>
@@ -411,7 +428,7 @@ export function ExperimentWizard({
                 type="text"
                 value={llmModel}
                 onChange={(e) => setLlmModel(e.target.value)}
-                placeholder="e.g., mock-evaluator, llama3:8b, gpt-4o-mini"
+                placeholder="e.g., mock-evaluator, llama3:latest, gpt-4o-mini"
                 className="w-full h-10 px-3 rounded-md border border-border bg-surface text-sm font-mono"
               />
             </div>
@@ -425,7 +442,7 @@ export function ExperimentWizard({
                   id="wizard-llm-temp"
                   type="range"
                   min="0"
-                  max="1"
+                  max="2"
                   step="0.1"
                   value={temperature}
                   onChange={(e) => setTemperature(e.target.value)}
@@ -440,8 +457,8 @@ export function ExperimentWizard({
                 <input
                   id="wizard-llm-maxtokens"
                   type="number"
-                  min="64"
-                  max="4096"
+                  min="16"
+                  max="8192"
                   value={maxTokens}
                   onChange={(e) => setMaxTokens(e.target.value)}
                   className="w-full h-9 px-3 rounded-md border border-border bg-surface text-xs font-mono"
