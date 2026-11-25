@@ -34,6 +34,7 @@ import { Modal } from '@/components/common/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ApiClientError } from '@/services/api-client'
+import { copyTextToClipboard } from '@/lib/utils';
 import {
   getRun,
   getRunComparison,
@@ -432,12 +433,24 @@ export function AnalyticsPage() {
               <Button
                 variant="ghost"
                 size="sm"
+                isLoading={
+                  comparisonQuery.isFetching ||
+                  statisticsQuery.isFetching ||
+                  failuresQuery.isFetching
+                }
                 onClick={() => {
-                  comparisonQuery.refetch();
-                  statisticsQuery.refetch();
-                  failuresQuery.refetch();
-                  tracesQuery.refetch();
-                  pushToast({ title: 'Refreshed analytics', variant: 'info' });
+                  void Promise.all([
+                    comparisonQuery.refetch(),
+                    statisticsQuery.refetch(),
+                    failuresQuery.refetch(),
+                    tracesQuery.refetch(),
+                  ]).then((results) => {
+                    const anyError = results.some((r) => r.isError);
+                    pushToast({
+                      title: anyError ? 'Refresh completed with errors' : 'Refreshed analytics',
+                      variant: anyError ? 'warning' : 'info',
+                    });
+                  });
                 }}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
@@ -1036,7 +1049,7 @@ export function AnalyticsPage() {
                                         p &lt; 0.05 (Significant)
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-muted text-text-secondary border border-border">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-canvas text-text-secondary border border-border">
                                         p ≥ 0.05 (Not Significant)
                                       </span>
                                     )}
@@ -1106,7 +1119,7 @@ export function AnalyticsPage() {
                         placeholder="Search key or answers..."
                         value={failureSearch}
                         onChange={(e) => setFailureSearch(e.target.value)}
-                        className="h-8 pl-8 pr-3 text-xs bg-canvas border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary w-44"
+                        className="h-8 pl-8 pr-3 text-xs bg-canvas border border-border rounded text-text-primary placeholder:text-text-secondary focus:outline-none focus:border-primary w-44"
                       />
                     </div>
                   </div>
@@ -1166,7 +1179,7 @@ export function AnalyticsPage() {
                               {item.task_key}
                             </td>
                             <td className="px-3 py-2.5 capitalize text-text-secondary">
-                              {item.category.replace('_', ' ')}
+                              {item.category.replaceAll('_', ' ')}
                             </td>
                             <td className="px-3 py-2.5">
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
@@ -1250,10 +1263,19 @@ export function AnalyticsPage() {
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    navigator.clipboard.writeText(
+                    void copyTextToClipboard(
                       JSON.stringify(selectedTrace.event_data, null, 2),
-                    );
-                    pushToast({ title: 'Trace JSON copied to clipboard', variant: 'info' });
+                    ).then((copied) => {
+                      pushToast(
+                        copied
+                          ? { title: 'Trace JSON copied to clipboard', variant: 'info' }
+                          : {
+                            title: 'Copy failed',
+                            description: 'Clipboard access is unavailable in this browser context.',
+                            variant: 'error',
+                          },
+                      );
+                    });
                   }}
                 >
                   <Copy className="h-3 w-3" />
