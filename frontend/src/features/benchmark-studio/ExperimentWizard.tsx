@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   ArrowRight,
@@ -29,6 +29,7 @@ export function ExperimentWizard({
   onRunStarted,
   onGoToDatasets,
 }: ExperimentWizardProps) {
+  const queryClient = useQueryClient();
   const pushToast = useWorkspaceStore((state) => state.pushToast);
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
@@ -100,10 +101,14 @@ export function ExperimentWizard({
       };
 
       const exp = await createExperiment(projectId, payload);
+      void queryClient.invalidateQueries({ queryKey: ['experiments', projectId] });
       const run = await startRun(exp.id, { random_seed: Number(seed) || 42 });
       return { exp, run };
     },
     onSuccess: ({ exp, run }) => {
+      void queryClient.invalidateQueries({ queryKey: ['experiments', projectId] });
+      void queryClient.invalidateQueries({ queryKey: ['experiment-runs', exp.id] });
+      void queryClient.invalidateQueries({ queryKey: ['namespaces', projectId] });
       pushToast({
         title: 'Experiment launched',
         description: `Run #${run.run_number} started for "${exp.name}".`,
@@ -126,12 +131,13 @@ export function ExperimentWizard({
     );
   };
 
+  const hasDatasetTasks = (selectedDataset?.task_count ?? 0) > 0;
   const estimatedTasks =
     selectedArchs.length * (Number(numTrials) || 1) * (selectedDataset?.task_count ?? 0);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !activeDatasetId || selectedArchs.length === 0) return;
+    if (!name.trim() || !activeDatasetId || !hasDatasetTasks || selectedArchs.length === 0) return;
     launchMutation.mutate();
   };
 
@@ -173,13 +179,12 @@ export function ExperimentWizard({
               key={s}
               type="button"
               onClick={() => setStep(s as 1 | 2 | 3 | 4 | 5 | 6)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full whitespace-nowrap cursor-pointer transition-colors ${
-                step === s
-                  ? 'bg-primary text-white font-semibold'
-                  : step > s
-                    ? 'text-text-primary hover:bg-canvas'
-                    : 'text-text-secondary opacity-60'
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full whitespace-nowrap cursor-pointer transition-colors ${step === s
+                ? 'bg-primary text-white font-semibold'
+                : step > s
+                  ? 'text-text-primary hover:bg-canvas'
+                  : 'text-text-secondary opacity-60'
+                }`}
             >
               <span>{s}.</span>
               <span>{label}</span>
@@ -249,18 +254,17 @@ export function ExperimentWizard({
                   <div
                     key={arch}
                     onClick={() => toggleArch(arch)}
-                    className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${
-                      checked
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
-                        : 'border-border bg-canvas/30 hover:bg-canvas opacity-70'
-                    }`}
+                    className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${checked
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                      : 'border-border bg-canvas/30 hover:bg-canvas opacity-70'
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="font-mono text-xs font-semibold uppercase">{arch}</span>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => {}}
+                        onChange={() => { }}
                         aria-label={`Select ${arch} architecture`}
                         className="rounded border-border text-primary"
                       />
@@ -338,11 +342,10 @@ export function ExperimentWizard({
                   <div
                     key={ds.id}
                     onClick={() => setDatasetId(ds.id)}
-                    className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${
-                      isSelected
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
-                        : 'border-border bg-canvas/30 hover:bg-canvas'
-                    }`}
+                    className={`p-4 rounded-lg border text-left cursor-pointer transition-all ${isSelected
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                      : 'border-border bg-canvas/30 hover:bg-canvas'
+                      }`}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-sm text-text-primary">{ds.name}</span>
@@ -564,7 +567,7 @@ export function ExperimentWizard({
               disabled={
                 (step === 1 && !name.trim()) ||
                 (step === 2 && selectedArchs.length === 0) ||
-                (step === 3 && !activeDatasetId)
+                (step === 3 && (!activeDatasetId || !hasDatasetTasks))
               }
               onClick={() => setStep((s) => Math.min(6, s + 1) as 1 | 2 | 3 | 4 | 5 | 6)}
             >
@@ -575,7 +578,9 @@ export function ExperimentWizard({
             <Button
               type="submit"
               isLoading={launchMutation.isPending}
-              disabled={!name.trim() || !activeDatasetId || selectedArchs.length === 0}
+              disabled={
+                !name.trim() || !activeDatasetId || !hasDatasetTasks || selectedArchs.length === 0
+              }
             >
               <FlaskConical className="h-4 w-4" aria-hidden="true" />
               Launch Benchmark Run
