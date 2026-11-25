@@ -18,7 +18,7 @@ import { Button } from '@/components/common/Button';
 import { Modal } from '@/components/common/Modal';
 import { EmptyState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, parseNumberOrDefault } from '@/lib/utils';
 import { ApiClientError } from '@/services/api-client';
 import {
   deleteMemory,
@@ -340,11 +340,10 @@ export function MemoryInspectorPage() {
                       key={mem.id}
                       type="button"
                       onClick={() => setSelectedMemoryId(mem.id)}
-                      className={`w-full text-left p-3.5 transition-colors cursor-pointer block ${
-                        isSelected
-                          ? 'bg-primary/10 border-l-2 border-primary'
-                          : 'hover:bg-canvas/60'
-                      }`}
+                      className={`w-full text-left p-3.5 transition-colors cursor-pointer block ${isSelected
+                        ? 'bg-primary/10 border-l-2 border-primary'
+                        : 'hover:bg-canvas/60'
+                        }`}
                     >
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="flex items-center gap-1.5">
@@ -359,9 +358,8 @@ export function MemoryInspectorPage() {
                       </div>
 
                       <p
-                        className={`text-xs mt-1 line-clamp-2 ${
-                          isDeleted ? 'font-mono text-error font-medium' : 'text-text-primary'
-                        }`}
+                        className={`text-xs mt-1 line-clamp-2 ${isDeleted ? 'font-mono text-error font-medium' : 'text-text-primary'
+                          }`}
                       >
                         {mem.content}
                       </p>
@@ -436,55 +434,50 @@ export function MemoryInspectorPage() {
                     <button
                       type="button"
                       onClick={() => setActiveTab('content')}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                        activeTab === 'content'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-text-secondary hover:text-text-primary'
-                      }`}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'content'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-text-secondary hover:text-text-primary'
+                        }`}
                     >
                       Content & Metadata
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('facts')}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                        activeTab === 'facts'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-text-secondary hover:text-text-primary'
-                      }`}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'facts'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-text-secondary hover:text-text-primary'
+                        }`}
                     >
                       Extracted Facts
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('versions')}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                        activeTab === 'versions'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-text-secondary hover:text-text-primary'
-                      }`}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'versions'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-text-secondary hover:text-text-primary'
+                        }`}
                     >
                       Version History
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('lifecycle')}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                        activeTab === 'lifecycle'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-text-secondary hover:text-text-primary'
-                      }`}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'lifecycle'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-text-secondary hover:text-text-primary'
+                        }`}
                     >
                       Lifecycle Timeline
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('json')}
-                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${
-                        activeTab === 'json'
-                          ? 'border-primary text-primary'
-                          : 'border-transparent text-text-secondary hover:text-text-primary'
-                      }`}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 whitespace-nowrap cursor-pointer transition-colors ${activeTab === 'json'
+                        ? 'border-primary text-primary'
+                        : 'border-transparent text-text-secondary hover:text-text-primary'
+                        }`}
                     >
                       Raw JSON
                     </button>
@@ -805,8 +798,8 @@ function EditMemoryModal({ open, memory, onClose, onUpdated }: EditMemoryModalPr
 
     updateMutation.mutate({
       content: content.trim(),
-      importance: Number(importance) || 0.5,
-      confidence: Number(confidence) || 1.0,
+      importance: parseNumberOrDefault(importance, 0.5),
+      confidence: parseNumberOrDefault(confidence, 1.0),
       change_reason: changeReason.trim() || 'manual_edit',
     });
   };
