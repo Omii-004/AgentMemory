@@ -17,6 +17,7 @@ import { Modal } from '@/components/common/Modal';
 import { EmptyState, ErrorState, LoadingState } from '@/components/common/StateViews';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { ApiClientError } from '@/services/api-client';
+import { copyTextToClipboard } from '@/lib/utils';
 import {
   downloadReportFile,
   generateReport,
@@ -173,9 +174,14 @@ export function ReportsPage() {
             <Button
               variant="ghost"
               size="sm"
+              isLoading={reportsQuery.isFetching}
               onClick={() => {
-                reportsQuery.refetch();
-                pushToast({ title: 'Refreshed reports', variant: 'info' });
+                void reportsQuery.refetch().then((res) => {
+                  pushToast({
+                    title: res.isError ? 'Failed to refresh reports' : 'Refreshed reports',
+                    variant: res.isError ? 'error' : 'info',
+                  });
+                });
               }}
             >
               <RefreshCw className="h-3.5 w-3.5" />
@@ -205,14 +211,23 @@ export function ReportsPage() {
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(report.id);
-                            pushToast({
-                              title: 'Report ID copied',
-                              description: report.id,
-                              variant: 'info',
+                            void copyTextToClipboard(report.id).then((copied) => {
+                              pushToast(
+                                copied
+                                  ? {
+                                    title: 'Report ID copied',
+                                    description: report.id,
+                                    variant: 'info',
+                                  }
+                                  : {
+                                    title: 'Copy failed',
+                                    description: 'Clipboard access is unavailable in this browser context.',
+                                    variant: 'error',
+                                  },
+                              );
                             });
                           }}
-                          className="p-1 rounded text-text-secondary hover:text-text-primary"
+                          className="p-1 rounded text-text-secondary hover:text-text-primary cursor-pointer"
                           title="Copy UUID"
                         >
                           <Copy className="h-3 w-3" />
@@ -551,8 +566,17 @@ function ReportPreviewModal({ report, onClose, onDownload }: ReportPreviewModalP
                 size="sm"
                 variant="ghost"
                 onClick={() => {
-                  navigator.clipboard.writeText(JSON.stringify(reportData, null, 2));
-                  pushToast({ title: 'Report JSON copied', variant: 'info' });
+                  void copyTextToClipboard(JSON.stringify(reportData, null, 2)).then((copied) => {
+                    pushToast(
+                      copied
+                        ? { title: 'Report JSON copied', variant: 'info' }
+                        : {
+                          title: 'Copy failed',
+                          description: 'Clipboard access is unavailable in this browser context.',
+                          variant: 'error',
+                        },
+                    );
+                  });
                 }}
               >
                 <Copy className="h-3 w-3" />
