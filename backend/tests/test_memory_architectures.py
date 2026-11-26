@@ -215,7 +215,8 @@ async def test_memory_consolidation_and_zero_leakage_deletion(db_session, cleanu
 
     # Delete original consolidated source -> must purge consolidated summary too (zero leakage)
     secret_uuid = uuid.UUID(secret_res.affected_memory_ids[0])
-    consolidated_uuid = uuid.UUID(res.consolidated_memory_id)  # type: ignore[arg-type]
+    assert res.consolidated_memory_id is not None
+    consolidated_uuid = uuid.UUID(res.consolidated_memory_id)
 
     del_res = await mem.delete(str(secret_uuid))
     assert del_res.status == "success"
